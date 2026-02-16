@@ -31,6 +31,10 @@ Two Docker volumes persist state across container restarts:
 ├── docker-compose.yml      # Service definition (pulls from GHCR), volumes, env vars
 ├── Makefile                # build, up, down, logs, shell, ssh, clean
 ├── .env.example            # Template for CLAUDE_CODE_OAUTH_TOKEN and passwords
+├── package.json            # Dev dependency: @playwright/test
+├── playwright.config.ts    # Playwright config (baseURL: localhost:7681, Chromium only)
+├── tests/                  # Playwright e2e tests
+│   └── ttyd.spec.ts        # ttyd web terminal tests
 └── rootfs/                 # Files copied into the container at /
     └── etc/
         ├── ssh/sshd_config
@@ -75,7 +79,23 @@ Uses `CLAUDE_CODE_OAUTH_TOKEN` (OAuth token from `claude setup-token`) — not `
 
 ## Testing Strategy
 
-There is no automated test suite. Verify changes manually:
+### Automated tests (Playwright)
+
+Playwright e2e tests verify the ttyd web terminal. The config (`playwright.config.ts`) targets `http://localhost:7681` with basic-auth credentials and runs Chromium only.
+
+```bash
+# Prerequisites: container must be running (make up / docker build + run)
+npm install          # install @playwright/test
+npx playwright test  # run all tests
+```
+
+Tests in `tests/ttyd.spec.ts`:
+- **ttyd web terminal loads** — xterm.js container is visible
+- **ttyd terminal has a canvas renderer** — canvas element is rendering
+- **ttyd terminal is interactive** — terminal accepts keyboard input (requires `-W` flag)
+- **ttyd returns correct auth challenge** — HTTP 200 with valid credentials
+
+### Manual verification
 
 1. **Build** — `make build` must complete without errors.
 2. **Startup** — `make up` then `docker compose ps` should show the container as healthy (healthcheck curls `http://localhost:7681`).

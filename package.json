@@ -1,0 +1,10 @@
+{
+  "name": "claude-box",
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  },
+  "scripts": {
+    "test": "playwright test"
+  }
+}
