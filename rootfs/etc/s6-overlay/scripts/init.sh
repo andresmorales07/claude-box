@@ -20,6 +20,15 @@ touch /home/claude/.claude/ssh/authorized_keys
 chmod 700 /home/claude/.claude/ssh
 chmod 600 /home/claude/.claude/ssh/authorized_keys
 
+# Persist ~/.claude.json via symlink into the mounted volume
+if [ ! -L /home/claude/.claude.json ]; then
+    # Migrate existing file into the volume if present
+    if [ -f /home/claude/.claude.json ]; then
+        mv /home/claude/.claude.json /home/claude/.claude/claude.json
+    fi
+    ln -sf /home/claude/.claude/claude.json /home/claude/.claude.json
+fi
+
 # Ensure Docker runtime directories exist
 mkdir -p /var/run/docker
 
