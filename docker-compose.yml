@@ -1,6 +1,6 @@
 services:
   claude-box:
-    build: .
+    image: ghcr.io/andresmorales07/claude-box:1
     container_name: claude-box
     ports:
       - "2222:2222"
