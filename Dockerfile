@@ -80,6 +80,7 @@ RUN chmod +x /etc/s6-overlay/scripts/init.sh \
 # Set environment for Claude
 ENV S6_KEEP_ENV=1
 ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
+ENV CLAUDE_CONFIG_DIR=/home/claude/.claude
 
 EXPOSE 2222 7681
 
