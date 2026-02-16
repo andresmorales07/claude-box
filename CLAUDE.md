@@ -14,7 +14,7 @@ The container is built on Debian bookworm-slim and layers in three main subsyste
    - `ttyd` (longrun) — web terminal on port 7681 (basic-auth via `TTYD_USERNAME`/`TTYD_PASSWORD`).
    - `user` (bundle) — depends on all of the above; ensures correct startup order.
 
-2. **Claude Code** — installed globally via `npm install -g @anthropic-ai/claude-code`. Authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (OAuth, not API key). Node.js 20 LTS is included for MCP server support.
+2. **Claude Code** — installed via the native installer (`curl -fsSL https://claude.ai/install.sh | bash`) as the `claude` user, with a symlink at `/usr/local/bin/claude`. Users authenticate interactively via `claude` (login link flow); credentials persist in the `claude-config` volume. Node.js 20 LTS is included for MCP server support.
 
 3. **Networking** — two exposed ports:
    - `2222` — SSH access (`ssh -p 2222 claude@<host>`)
@@ -30,7 +30,7 @@ Two Docker volumes persist state across container restarts:
 ├── Dockerfile              # Debian bookworm-slim, Node.js 20, s6-overlay, ttyd, Claude Code
 ├── docker-compose.yml      # Service definition (pulls from GHCR), volumes, env vars
 ├── Makefile                # build, up, down, logs, shell, ssh, clean
-├── .env.example            # Template for CLAUDE_CODE_OAUTH_TOKEN and passwords
+├── .env.example            # Template for SSH and ttyd passwords
 ├── package.json            # Dev dependency: @playwright/test
 ├── playwright.config.ts    # Playwright config (baseURL: localhost:7681, Chromium only)
 ├── tests/                  # Playwright e2e tests
@@ -67,7 +67,7 @@ claude        # Launch Claude Code CLI
 
 ## Authentication
 
-Uses `CLAUDE_CODE_OAUTH_TOKEN` (OAuth token from `claude setup-token`) — not `ANTHROPIC_API_KEY`. If `ANTHROPIC_API_KEY` is set, Claude Code will use API billing instead of the Max/Pro subscription, so never set both.
+Users authenticate interactively by running `claude` inside the container and following the login link. Credentials are stored in `~/.claude/` which is backed by the `claude-config` Docker volume, so they persist across container restarts.
 
 ## Key Conventions
 
@@ -75,7 +75,6 @@ Uses `CLAUDE_CODE_OAUTH_TOKEN` (OAuth token from `claude setup-token`) — not `
 - Two Docker volumes: `claude-config` (~/.claude) and `workspace` (~/workspace)
 - s6-overlay v3 service types: `oneshot` for init, `longrun` for sshd/ttyd, `bundle` for user
 - `S6_KEEP_ENV=1` ensures environment variables propagate to all services
-- sshd `AcceptEnv` allows `CLAUDE_CODE_OAUTH_TOKEN` to pass through SSH sessions
 
 ## Testing Strategy
 
@@ -101,6 +100,6 @@ Tests in `tests/ttyd.spec.ts`:
 2. **Startup** — `make up` then `docker compose ps` should show the container as healthy (healthcheck curls `http://localhost:7681`).
 3. **SSH access** — `make ssh` (or `ssh -p 2222 claude@localhost`) should connect and drop into a bash shell.
 4. **Web terminal** — open `http://localhost:7681` in a browser, authenticate with `TTYD_USERNAME`/`TTYD_PASSWORD`.
-5. **Claude Code** — run `claude` inside the container and confirm it authenticates with the provided OAuth token.
+5. **Claude Code** — run `claude` inside the container and follow the login link to authenticate.
 6. **Volume persistence** — `make down && make up`, then verify files in `~/workspace` and `~/.claude` survived the restart.
 7. **CI** — GitHub Actions runs `docker compose build` and verifies the image starts and passes its healthcheck.

@@ -2,10 +2,10 @@ Port 2222
 PermitRootLogin no
 PasswordAuthentication yes
 PubkeyAuthentication yes
-AuthorizedKeysFile .ssh/authorized_keys
+AuthorizedKeysFile /home/claude/.claude/ssh/authorized_keys
 ChallengeResponseAuthentication no
 UsePAM yes
 X11Forwarding no
 PrintMotd no
-AcceptEnv LANG LC_* CLAUDE_CODE_OAUTH_TOKEN
+AcceptEnv LANG LC_*
 Subsystem sftp /usr/lib/openssh/sftp-server

@@ -37,12 +37,15 @@ RUN useradd -m -s /bin/bash -u 1000 claude \
     && echo "claude ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/claude \
     && chmod 0440 /etc/sudoers.d/claude
 
-# Install Claude Code via npm (official method)
-RUN npm install -g @anthropic-ai/claude-code
-
 # Create volume mount points
 RUN mkdir -p /home/claude/.claude /home/claude/workspace \
     && chown -R claude:claude /home/claude
+
+# Install Claude Code via native installer as claude user
+USER claude
+RUN curl -fsSL https://claude.ai/install.sh | bash
+USER root
+RUN ln -sf /home/claude/.local/bin/claude /usr/local/bin/claude
 
 # Copy s6 service definitions and configs
 COPY rootfs/ /

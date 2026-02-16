@@ -9,15 +9,16 @@ Dockerized Claude Code with multi-machine access. Configure once, connect from a
 git clone https://github.com/youruser/claude-box.git
 cd claude-box
 cp .env.example .env
-# Edit .env with your OAuth token and passwords
+# Edit .env with your passwords
 
 # 2. Build and run
 make build
 make up
 
-# 3. Connect
+# 3. Connect and authenticate
 make ssh                        # SSH access
 open http://localhost:7681      # Browser access
+claude                          # Follow the login link to authenticate
 ```
 
 ## Access Methods
@@ -48,23 +49,13 @@ make shell
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `CLAUDE_CODE_OAUTH_TOKEN` | OAuth token from `claude setup-token` (see below) | *(required)* |
 | `CLAUDE_USER_PASSWORD` | SSH password for `claude` user | `changeme` |
 | `TTYD_USERNAME` | Web terminal username | `claude` |
 | `TTYD_PASSWORD` | Web terminal password | `changeme` |
 
-### Generating an OAuth Token
+## Authentication
 
-Claude Box authenticates using a long-lived OAuth token tied to your Claude Max or Pro subscription. To generate one:
-
-1. On a machine with a browser, install Claude Code and run:
-   ```bash
-   claude setup-token
-   ```
-2. Follow the prompts to authenticate in your browser.
-3. Copy the resulting token (starts with `sk-ant-oat01-`) into your `.env` file as `CLAUDE_CODE_OAUTH_TOKEN`.
-
-The token is valid for one year. **Do not** set `ANTHROPIC_API_KEY` alongside this token — if both are present, Claude Code will use API billing instead of your subscription.
+Claude Box uses the interactive login flow. After starting the container, run `claude` and follow the login link to authenticate with your Claude account. Credentials are stored in `~/.claude/` which is backed by the `claude-config` Docker volume, so they persist across container restarts.
 
 ## MCP Server Configuration
 

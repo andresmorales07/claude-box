@@ -14,6 +14,12 @@ fi
 # Ensure SSH run directory exists
 mkdir -p /run/sshd
 
+# Ensure authorized_keys directory exists on the volume
+mkdir -p /home/claude/.claude/ssh
+touch /home/claude/.claude/ssh/authorized_keys
+chmod 700 /home/claude/.claude/ssh
+chmod 600 /home/claude/.claude/ssh/authorized_keys
+
 # Fix ownership on mounted volumes
 chown -R claude:claude /home/claude/.claude
 chown -R claude:claude /home/claude/workspace

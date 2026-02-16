@@ -2,6 +2,7 @@ services:
   claude-box:
     image: ghcr.io/andresmorales07/claude-box:1
     container_name: claude-box
+    hostname: claude-box
     ports:
       - "2222:2222"
       - "7681:7681"
@@ -9,7 +10,6 @@ services:
       - claude-config:/home/claude/.claude
       - workspace:/home/claude/workspace
     environment:
-      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
       - CLAUDE_USER_PASSWORD=${CLAUDE_USER_PASSWORD:-changeme}
       - TTYD_USERNAME=${TTYD_USERNAME:-claude}
       - TTYD_PASSWORD=${TTYD_PASSWORD:-changeme}
