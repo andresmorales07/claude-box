@@ -98,7 +98,7 @@ Connect to your claude-box from anywhere without exposing ports publicly. Set `T
 
 **Networking mode:** The container auto-detects TUN device availability at startup:
 - **Kernel TUN mode** (default with `docker-compose.yml`): Transparent routing — all apps can reach Tailscale peers without any proxy configuration. Requires `cap_add: NET_ADMIN` and `/dev/net/tun` device (both provided in `docker-compose.yml`).
-- **Userspace fallback** (no TUN device): Apps must use the SOCKS5 proxy at `localhost:1055`. Proxy env vars (`ALL_PROXY`, `HTTP_PROXY`, `HTTPS_PROXY`) are set automatically via `/etc/profile.d/tailscale-proxy.sh`.
+- **Userspace fallback** (no TUN device): Apps must use the SOCKS5 proxy at `localhost:1055` explicitly. A `TAILSCALE_PROXY` variable is written to `/etc/profile.d/tailscale-proxy.sh` for convenience, but is **not exported** to avoid breaking general internet connectivity. Use per-command: `ALL_PROXY=socks5h://localhost:1055 curl http://tailscale-peer/...`
 
 ## Environment Variables
 

@@ -11,24 +11,29 @@ chown claude:claude /home/claude/.tailscale
 mkdir -p /var/run/tailscale
 
 # Auto-detect TUN device availability for transparent networking
-if [ -c /dev/net/tun ] && cat < /dev/net/tun > /dev/null 2>&1; then
+# Check for the character device only — do NOT read from it (reads block/fail)
+if [ -c /dev/net/tun ]; then
     # Kernel TUN mode — transparent routing, no proxy needed
     echo "tailscaled: using kernel TUN mode (transparent networking)" >&2
     exec tailscaled \
         --statedir=/home/claude/.tailscale \
         --socket=/var/run/tailscale/tailscaled.sock
 else
-    # Userspace networking fallback — apps need SOCKS5 proxy
+    # Userspace networking fallback — apps need SOCKS5 proxy for Tailscale peers only
     echo "tailscaled: /dev/net/tun not available, falling back to userspace networking" >&2
 
-    # Export proxy env vars so interactive shells can reach Tailscale peers
+    # Write proxy env vars scoped to Tailscale traffic only.
+    # We do NOT set ALL_PROXY / HTTP_PROXY / HTTPS_PROXY because that would
+    # redirect ALL internet traffic through the Tailscale SOCKS5 proxy and
+    # break general connectivity. Users who need proxy-based access to
+    # Tailscale peers can source this file or set these vars manually.
     cat > /etc/profile.d/tailscale-proxy.sh <<'EOF'
 # Tailscale userspace-networking SOCKS5 proxy (auto-generated)
-export ALL_PROXY=socks5h://localhost:1055
-export HTTP_PROXY=socks5h://localhost:1055
-export HTTPS_PROXY=socks5h://localhost:1055
-export http_proxy=socks5h://localhost:1055
-export https_proxy=socks5h://localhost:1055
+# NOT exported by default — setting ALL_PROXY/HTTP_PROXY globally breaks
+# internet connectivity for non-Tailscale destinations.
+# To use: export ALL_PROXY=socks5h://localhost:1055
+# Or use per-command: ALL_PROXY=socks5h://localhost:1055 curl http://tailscale-peer/...
+TAILSCALE_PROXY=socks5h://localhost:1055
 EOF
 
     exec tailscaled \

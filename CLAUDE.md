@@ -22,7 +22,7 @@ The container is built on Debian bookworm-slim and layers in three main subsyste
    - `7681` — ttyd web terminal (`http://<host>:7681`)
    - `60000-60003/udp` — mosh (Mobile Shell) for resilient remote access
 
-4. **Tailscale VPN (optional)** — when `TS_AUTHKEY` is set, `tailscaled` auto-detects TUN device availability. With `/dev/net/tun` and `NET_ADMIN` (provided by `docker-compose.yml`), it uses kernel TUN mode for transparent routing — apps reach Tailscale peers without proxy config. Without TUN, it falls back to userspace networking and writes SOCKS5 proxy env vars (`ALL_PROXY`, etc.) to `/etc/profile.d/tailscale-proxy.sh`. State is persisted under `~/.tailscale/` in the `claude-home` volume.
+4. **Tailscale VPN (optional)** — when `TS_AUTHKEY` is set, `tailscaled` auto-detects TUN device availability. With `/dev/net/tun` and `NET_ADMIN` (provided by `docker-compose.yml`), it uses kernel TUN mode for transparent routing — apps reach Tailscale peers without proxy config. Without TUN, it falls back to userspace networking and sets `TAILSCALE_PROXY` (not exported) in `/etc/profile.d/tailscale-proxy.sh` for opt-in use. State is persisted under `~/.tailscale/` in the `claude-home` volume.
 
 Two Docker volumes persist state across container restarts:
 - `claude-home` → `/home/claude` (Claude config, workspace, npm globals, GPG keys, etc.)
