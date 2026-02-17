@@ -29,7 +29,7 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
        https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io \
+    && apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
 
 # Downgrade runc to 1.1.x — runc >=1.2 added a "safe procfs" check (CVE-2025-52881)
