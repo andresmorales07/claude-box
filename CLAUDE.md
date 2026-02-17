@@ -22,7 +22,7 @@ The container is built on Debian bookworm-slim and layers in three main subsyste
    - `7681` — ttyd web terminal (`http://<host>:7681`)
    - `60000-60003/udp` — mosh (Mobile Shell) for resilient remote access
 
-4. **Tailscale VPN (optional)** — when `TS_AUTHKEY` is set, `tailscaled` runs in userspace-networking mode and joins the configured tailnet. State is persisted under `~/.tailscale/` in the `claude-home` volume.
+4. **Tailscale VPN (optional)** — when `TS_AUTHKEY` is set, `tailscaled` auto-detects TUN device availability. With `/dev/net/tun` and `NET_ADMIN` (provided by `docker-compose.yml`), it uses kernel TUN mode for transparent routing — apps reach Tailscale peers without proxy config. Without TUN, it falls back to userspace networking and writes SOCKS5 proxy env vars (`ALL_PROXY`, etc.) to `/etc/profile.d/tailscale-proxy.sh`. State is persisted under `~/.tailscale/` in the `claude-home` volume.
 
 Two Docker volumes persist state across container restarts:
 - `claude-home` → `/home/claude` (Claude config, workspace, npm globals, GPG keys, etc.)
@@ -105,6 +105,7 @@ Users authenticate interactively by running `claude` inside the container and fo
 - `S6_KEEP_ENV=1` ensures environment variables propagate to all services
 - When adding or removing software from the Dockerfile, update the "What's Included" table in README.md to match
 - Tailscale and dotfiles are opt-in features controlled by env vars (`TS_AUTHKEY`, `DOTFILES_REPO`)
+- `docker-compose.yml` includes `cap_add: NET_ADMIN` and `/dev/net/tun` device for Tailscale kernel TUN mode; harmless when Tailscale is not enabled
 
 ## Testing Strategy
 

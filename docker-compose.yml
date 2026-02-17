@@ -4,6 +4,10 @@ services:
     container_name: claude-box
     hostname: claude-box
     runtime: sysbox-runc
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
     ports:
       - "2222:2222"
       - "7681:7681"

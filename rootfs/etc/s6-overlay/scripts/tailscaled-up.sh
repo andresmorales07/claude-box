@@ -22,4 +22,5 @@ exec tailscale up \
     --authkey="$TS_AUTHKEY" \
     --hostname="${TS_HOSTNAME:-claude-box}" \
     --ssh=false \
-    --accept-dns=false
+    --accept-dns=false \
+    --accept-routes
