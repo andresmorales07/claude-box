@@ -68,6 +68,24 @@ make logs     # Tail container logs (s6 + services)
 claude        # Launch Claude Code CLI
 ```
 
+## Sysbox Runtime Detection
+
+The `docker-compose.yml` specifies `runtime: sysbox-runc`, which is only available on the Docker host — not inside a Sysbox container. When building or running claude-box from inside an existing Sysbox container (i.e., when Claude Code is running inside claude-box itself), you must override the runtime to avoid `unknown or invalid runtime name` errors:
+
+```bash
+# Check if running inside a Sysbox container (sysboxfs FUSE mounts are the reliable indicator)
+if mount | grep -q sysboxfs 2>/dev/null; then
+  # Inside Sysbox — sysbox-runc runtime is not available here, override to default runc
+  docker compose build
+  docker compose up -d --runtime runc
+else
+  # On a host with Sysbox installed — use docker-compose.yml as-is
+  make build && make up
+fi
+```
+
+Note: Without Sysbox, Docker-in-Docker will not work inside the nested container (dockerd requires Sysbox's enhanced isolation). SSH, ttyd, and Claude Code will function normally.
+
 ## Authentication
 
 Users authenticate interactively by running `claude` inside the container and following the login link. Credentials are stored in `~/.claude/` which is backed by the `claude-home` Docker volume, so they persist across container restarts.
