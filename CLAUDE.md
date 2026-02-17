@@ -22,6 +22,8 @@ The container is built on Debian bookworm-slim and layers in three main subsyste
    - `7681` — ttyd web terminal (`http://<host>:7681`)
    - `60000-60003/udp` — mosh (Mobile Shell) for resilient remote access
 
+4. **Tailscale VPN (optional)** — when `TS_AUTHKEY` is set, `tailscaled` runs in userspace-networking mode and joins the configured tailnet. State is persisted under `~/.tailscale/` in the `claude-home` volume.
+
 Two Docker volumes persist state across container restarts:
 - `claude-home` → `/home/claude` (Claude config, workspace, npm globals, GPG keys, etc.)
 - `docker-data` → `/var/lib/docker` (Docker images, containers, layers)
@@ -41,13 +43,16 @@ Two Docker volumes persist state across container restarts:
     └── etc/
         ├── ssh/sshd_config
         └── s6-overlay/
-            ├── scripts/init.sh          # Oneshot: SSH keys, user password, volume ownership
+            ├── scripts/init.sh          # Oneshot: SSH keys, user password, volume ownership, dotfiles
+            ├── scripts/tailscaled-up.sh # Oneshot: authenticate with tailnet
             └── s6-rc.d/
                 ├── init/                # Oneshot service (runs init.sh)
                 ├── sshd/                # Long-running SSH daemon
                 ├── ttyd/                # Long-running web terminal
                 ├── dockerd/             # Long-running Docker daemon (DinD)
-                └── user/                # Bundle: init + sshd + ttyd + dockerd
+                ├── tailscaled/          # Long-running Tailscale daemon (opt-in)
+                ├── tailscaled-up/       # Oneshot: authenticate with tailnet
+                └── user/                # Bundle: init + sshd + ttyd + dockerd + tailscaled-up
 ```
 
 ## Common Commands
@@ -99,6 +104,7 @@ Users authenticate interactively by running `claude` inside the container and fo
 - s6-overlay v3 service types: `oneshot` for init, `longrun` for sshd/ttyd, `bundle` for user
 - `S6_KEEP_ENV=1` ensures environment variables propagate to all services
 - When adding or removing software from the Dockerfile, update the "What's Included" table in README.md to match
+- Tailscale and dotfiles are opt-in features controlled by env vars (`TS_AUTHKEY`, `DOTFILES_REPO`)
 
 ## Testing Strategy
 
@@ -144,3 +150,5 @@ Tests in `tests/ttyd.spec.ts`:
 7. **Volume persistence** — `make down && make up`, then verify files in `~/workspace` and `~/.claude` survived the restart.
 8. **Docker-in-Docker** — `make docker-test` runs `docker run hello-world` inside the container (requires Sysbox on host).
 9. **CI** — GitHub Actions runs `docker compose build` and verifies the image starts and passes its healthcheck. Note: Sysbox is not available in CI, so dockerd will not start there.
+10. **Tailscale VPN** — set `TS_AUTHKEY` in `.env`, restart, verify `tailscale status` shows the node connected to the tailnet.
+11. **Dotfiles** — set `DOTFILES_REPO` in `.env`, start a fresh container (no existing `claude-home` volume), verify `~/dotfiles` is cloned and install script was run.
