@@ -43,6 +43,7 @@ The container comes pre-installed with:
 | **AI** | Claude Code | Anthropic's CLI agent |
 | **Runtimes** | Node.js 20 LTS | MCP servers (npx) |
 | | Python 3 + venv | MCP servers (uvx) |
+| | .NET SDK 8.0, 9.0, 10.0 | Side-by-side; selected via `global.json` |
 | **Package managers** | npm | Node packages (global prefix persisted) |
 | | uv / uvx | Python packages and tool runner |
 | **Containers** | Docker Engine + Compose | Docker-in-Docker (requires Sysbox on host) |

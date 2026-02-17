@@ -3,6 +3,7 @@ FROM debian:bookworm-slim
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TTYD_VERSION=1.7.7
 ARG RUNC_VERSION=1.1.15
+ARG DOTNET_CHANNELS="8.0 9.0 10.0"
 ARG TARGETARCH
 
 # Install base packages
@@ -32,6 +33,15 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 # Install uv (Python package manager, provides uvx)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uvx /usr/local/bin/uvx
+
+# Install .NET SDKs — side-by-side in /usr/share/dotnet (channels set via DOTNET_CHANNELS build arg)
+RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
+    && for channel in ${DOTNET_CHANNELS}; do \
+         bash /tmp/dotnet-install.sh --channel "$channel" --install-dir /usr/share/dotnet; \
+       done \
+    && ln -s /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
+    && rm /tmp/dotnet-install.sh
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 
 # Install Docker Engine (requires Sysbox runtime on host for DinD)
 RUN install -m 0755 -d /etc/apt/keyrings \
