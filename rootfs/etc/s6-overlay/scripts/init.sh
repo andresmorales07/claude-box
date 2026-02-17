@@ -27,3 +27,4 @@ mkdir -p /var/run/docker
 chown -R claude:claude /home/claude/.claude
 chown -R claude:claude /home/claude/workspace
 chown -R claude:claude /home/claude/.npm-global
+chown -R claude:claude /home/claude/.config
