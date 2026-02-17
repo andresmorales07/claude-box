@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Tailscale is optional — if TS_AUTHKEY is not set, exit cleanly
+# so s6 does not keep restarting the daemon unnecessarily.
+if [ -z "$TS_AUTHKEY" ]; then
+    exec s6-svc -Od .
+fi
+
+mkdir -p /home/claude/.tailscale
+mkdir -p /var/run/tailscale
+
+exec tailscaled \
+    --tun=userspace-networking \
+    --statedir=/home/claude/.tailscale \
+    --socket=/var/run/tailscale/tailscaled.sock
