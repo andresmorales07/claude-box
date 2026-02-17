@@ -13,8 +13,10 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:7681',
     trace: 'on-first-retry',
-    extraHTTPHeaders: {
-      'Authorization': `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
+    httpCredentials: {
+      username,
+      password,
+      send: 'always',
     },
   },
   projects: [

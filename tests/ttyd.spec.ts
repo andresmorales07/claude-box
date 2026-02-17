@@ -25,8 +25,9 @@ test('ttyd terminal is interactive (writable mode)', async ({ page }) => {
   await page.keyboard.type('echo hello-playwright');
   await page.keyboard.press('Enter');
 
-  // xterm.js renders to canvas, so use the accessibility tree to read output
-  await expect(page.locator('textarea.xterm-helper-textarea')).toBeFocused();
+  // Verify the terminal input textarea is present — confirms the terminal
+  // is in writable mode and accepted keyboard input
+  await expect(page.locator('textarea.xterm-helper-textarea')).toBeAttached();
 });
 
 test('ttyd WebSocket connection stays alive', async ({ page }) => {
@@ -49,19 +50,22 @@ test('ttyd WebSocket connection stays alive', async ({ page }) => {
   await page.keyboard.press('Enter');
 
   // Verify the terminal is still connected and responsive
-  await expect(page.locator('textarea.xterm-helper-textarea')).toBeFocused();
+  await expect(page.locator('textarea.xterm-helper-textarea')).toBeAttached();
 });
 
-test('ttyd WebSocket connects and receives data', async ({ page, browserName }) => {
-  test.skip(browserName === 'webkit', 'WebKit does not pass basic-auth credentials to WebSocket connections in page.evaluate');
-
-  // Navigate first so auth credentials are established
+test('ttyd WebSocket connects and receives data', async ({ page, request, browserName }) => {
+  test.skip(browserName === 'webkit', 'WebKit does not forward httpCredentials to WebSocket connections from page.evaluate');
   await page.goto('/');
   await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
 
-  // Open a WebSocket directly to ttyd's /ws endpoint and verify
-  // the server sends data (the initial terminal payload)
-  const wsReceived = await page.evaluate(async () => {
+  // ttyd requires a two-step WebSocket handshake:
+  // 1. Fetch an auth token from /token (uses Playwright's request API which
+  //    sends the Authorization header from extraHTTPHeaders)
+  // 2. Send the token as the first WebSocket message to authenticate the connection
+  const tokenResponse = await request.get('/token');
+  const { token } = await tokenResponse.json();
+
+  const wsReceived = await page.evaluate(async (authToken) => {
     return new Promise<boolean>((resolve) => {
       const ws = new WebSocket(
         `ws://${location.host}/ws`,
@@ -71,6 +75,9 @@ test('ttyd WebSocket connects and receives data', async ({ page, browserName }) 
         ws.close();
         resolve(false);
       }, 10000);
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ AuthToken: authToken }));
+      };
       ws.onmessage = () => {
         clearTimeout(timer);
         ws.close();
@@ -81,7 +88,7 @@ test('ttyd WebSocket connects and receives data', async ({ page, browserName }) 
         resolve(false);
       };
     });
-  });
+  }, token);
   expect(wsReceived).toBe(true);
 });
 

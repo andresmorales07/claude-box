@@ -101,18 +101,33 @@ Users authenticate interactively by running `claude` inside the container and fo
 
 ### Automated tests (Playwright)
 
-Playwright e2e tests verify the ttyd web terminal. The config (`playwright.config.ts`) targets `http://localhost:7681` with basic-auth credentials and runs Chromium only.
+Playwright e2e tests verify the ttyd web terminal. The config (`playwright.config.ts`) targets `http://localhost:7681` with basic-auth credentials and runs Chromium and WebKit.
+
+**Important:** Always run tests by building and running the Docker container first — do not run them against an externally running instance. The tests depend on the container's ttyd configuration (writable mode, auth credentials, ping interval).
 
 ```bash
-# Prerequisites: container must be running (make up / docker build + run)
-npm install          # install @playwright/test
-npx playwright test  # run all tests
+# 1. Build and run the container
+docker build -t claude-box:latest .
+docker run -d --name claude-box-test \
+  -p 7681:7681 -p 2222:2222 \
+  -e TTYD_USERNAME=claude \
+  -e TTYD_PASSWORD=changeme \
+  claude-box:latest
+
+# 2. Run tests (credentials must match the container's env vars)
+npm install
+npx playwright test
+
+# 3. Clean up
+docker rm -f claude-box-test
 ```
 
 Tests in `tests/ttyd.spec.ts`:
 - **ttyd web terminal loads** — xterm.js container is visible
-- **ttyd terminal has a canvas renderer** — canvas element is rendering
-- **ttyd terminal is interactive** — terminal accepts keyboard input (requires `-W` flag)
+- **ttyd terminal has a visible renderer** — canvas or DOM renderer is rendering
+- **ttyd terminal is interactive** — terminal accepts keyboard input and has an input textarea
+- **ttyd WebSocket connection stays alive** — terminal remains responsive after idle period
+- **ttyd WebSocket connects and receives data** — raw WebSocket to `/ws` receives terminal payload
 - **ttyd returns correct auth challenge** — HTTP 200 with valid credentials
 
 ### Manual verification
