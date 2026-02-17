@@ -8,6 +8,7 @@ ARG TARGETARCH
 # Install base packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openssh-server \
+        mosh \
         git \
         curl \
         ca-certificates \
@@ -91,6 +92,6 @@ ENV S6_KEEP_ENV=1
 ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 ENV CLAUDE_CONFIG_DIR=/home/claude/.claude
 
-EXPOSE 2222 7681
+EXPOSE 2222 7681 60000-60003/udp
 
 ENTRYPOINT ["/init"]

@@ -1,4 +1,4 @@
-.PHONY: build up down logs shell ssh clean docker-test
+.PHONY: build up down logs shell ssh mosh clean docker-test
 
 build:
 	docker compose build
@@ -17,6 +17,9 @@ shell:
 
 ssh:
 	ssh -p 2222 claude@localhost
+
+mosh:
+	mosh --ssh='ssh -p 2222' claude@localhost
 
 clean:
 	docker compose down -v --rmi local

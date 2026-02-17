@@ -17,9 +17,10 @@ The container is built on Debian bookworm-slim and layers in three main subsyste
 
 2. **Claude Code** — installed via the native installer (`curl -fsSL https://claude.ai/install.sh | bash`) as the `claude` user, with a symlink at `/usr/local/bin/claude`. Users authenticate interactively via `claude` (login link flow); credentials persist in the `claude-home` volume. Node.js 20 LTS is included for MCP server support.
 
-3. **Networking** — two exposed ports:
+3. **Networking** — three exposed ports:
    - `2222` — SSH access (`ssh -p 2222 claude@<host>`)
    - `7681` — ttyd web terminal (`http://<host>:7681`)
+   - `60000-60003/udp` — mosh (Mobile Shell) for resilient remote access
 
 Two Docker volumes persist state across container restarts:
 - `claude-home` → `/home/claude` (Claude config, workspace, npm globals, GPG keys, etc.)
@@ -62,6 +63,7 @@ make docker-test  # Run hello-world inside the container (DinD smoke test)
 # Access
 make shell    # Exec into the running container as `claude` user
 make ssh      # SSH into the container (port 2222)
+make mosh     # Connect via mosh (resilient mobile shell, port 2222 + UDP 60000-60003)
 make logs     # Tail container logs (s6 + services)
 
 # Inside the container
@@ -135,8 +137,9 @@ Tests in `tests/ttyd.spec.ts`:
 1. **Build** — `make build` must complete without errors.
 2. **Startup** — `make up` then `docker compose ps` should show the container as healthy (healthcheck curls `http://localhost:7681`).
 3. **SSH access** — `make ssh` (or `ssh -p 2222 claude@localhost`) should connect and drop into a bash shell.
-4. **Web terminal** — open `http://localhost:7681` in a browser, authenticate with `TTYD_USERNAME`/`TTYD_PASSWORD`.
-5. **Claude Code** — run `claude` inside the container and follow the login link to authenticate.
-6. **Volume persistence** — `make down && make up`, then verify files in `~/workspace` and `~/.claude` survived the restart.
-7. **Docker-in-Docker** — `make docker-test` runs `docker run hello-world` inside the container (requires Sysbox on host).
-8. **CI** — GitHub Actions runs `docker compose build` and verifies the image starts and passes its healthcheck. Note: Sysbox is not available in CI, so dockerd will not start there.
+4. **Mosh access** — `make mosh` (or `mosh --ssh='ssh -p 2222' claude@localhost`) should connect and drop into a bash shell. Verify the session survives a brief network interruption (e.g., sleep/wake laptop).
+5. **Web terminal** — open `http://localhost:7681` in a browser, authenticate with `TTYD_USERNAME`/`TTYD_PASSWORD`.
+6. **Claude Code** — run `claude` inside the container and follow the login link to authenticate.
+7. **Volume persistence** — `make down && make up`, then verify files in `~/workspace` and `~/.claude` survived the restart.
+8. **Docker-in-Docker** — `make docker-test` runs `docker run hello-world` inside the container (requires Sysbox on host).
+9. **CI** — GitHub Actions runs `docker compose build` and verifies the image starts and passes its healthcheck. Note: Sysbox is not available in CI, so dockerd will not start there.
