@@ -2,6 +2,7 @@ FROM debian:bookworm-slim
 
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TTYD_VERSION=1.7.7
+ARG RUNC_VERSION=1.1.15
 ARG TARGETARCH
 
 # Install base packages
@@ -30,6 +31,14 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && apt-get update \
     && apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io \
     && rm -rf /var/lib/apt/lists/*
+
+# Downgrade runc to 1.1.x — runc >=1.2 added a "safe procfs" check (CVE-2025-52881)
+# that uses openat2 to verify /proc is not a cross-device mount. Inside Sysbox containers,
+# /proc/sys is a FUSE mount (sysboxfs), which triggers "unsafe procfs detected" and blocks
+# all container launches. Sysbox on the host already provides equivalent isolation.
+RUN ARCH="$(dpkg --print-architecture)" \
+    && curl -fsSL "https://github.com/opencontainers/runc/releases/download/v${RUNC_VERSION}/runc.${ARCH}" -o /usr/bin/runc \
+    && chmod +x /usr/bin/runc
 
 # Install GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
