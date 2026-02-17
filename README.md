@@ -2,27 +2,58 @@
 
 Dockerized Claude Code with multi-machine access. Configure once, connect from anywhere via SSH or browser. Supports Docker-in-Docker via [Sysbox](https://github.com/nestybox/sysbox) for secure container builds inside the sandbox.
 
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) (with Compose v2)
+
 ## Quick Start
 
 ```bash
-# 0. Install Sysbox (required for Docker-in-Docker)
-# See https://github.com/nestybox/sysbox/blob/master/docs/user-guide/install-package.md
-
 # 1. Clone and configure
-git clone https://github.com/youruser/claude-box.git
+git clone https://github.com/andresmorales07/claude-box.git
 cd claude-box
-cp .env.example .env
-# Edit .env with your passwords
+cp .env.example .env            # edit .env to set your passwords
 
-# 2. Build and run
-make build
-make up
+# 2. Start (pulls the prebuilt image — no build step needed)
+docker compose up -d
 
-# 3. Connect and authenticate
-make ssh                        # SSH access
-open http://localhost:7681      # Browser access
-claude                          # Follow the login link to authenticate
+# 3. Connect
+ssh -p 2222 claude@localhost    # password is CLAUDE_USER_PASSWORD from .env
+# — or open http://localhost:7681 in a browser (TTYD_USERNAME / TTYD_PASSWORD)
+
+# 4. Authenticate Claude Code (first time only)
+claude                          # follow the login link that appears
 ```
+
+> **No Sysbox?** The default `docker-compose.yml` sets `runtime: sysbox-runc` for Docker-in-Docker. If you don't have [Sysbox](https://github.com/nestybox/sysbox) installed, create a one-line override to use the default runtime:
+>
+> ```bash
+> echo 'services: { claude-box: { runtime: runc } }' > docker-compose.override.yml
+> docker compose up -d
+> ```
+>
+> Everything except `docker` commands inside the container will work without Sysbox.
+
+## What's Included
+
+The container comes pre-installed with:
+
+| Category | Software | Purpose |
+|----------|----------|---------|
+| **AI** | Claude Code | Anthropic's CLI agent |
+| **Runtimes** | Node.js 20 LTS | MCP servers (npx) |
+| | Python 3 + venv | MCP servers (uvx) |
+| **Package managers** | npm | Node packages (global prefix persisted) |
+| | uv / uvx | Python packages and tool runner |
+| **Containers** | Docker Engine + Compose | Docker-in-Docker (requires Sysbox on host) |
+| **Access** | OpenSSH server | Remote access (port 2222) |
+| | ttyd | Web terminal (port 7681) |
+| | mosh | Resilient mobile shell (UDP 60000-60003) |
+| **Dev tools** | git | Version control |
+| | GitHub CLI (gh) | GitHub operations |
+| | curl, jq | HTTP requests and JSON processing |
+| **System** | s6-overlay v3 | Process supervision |
+| | sudo (passwordless) | Root access for `claude` user |
 
 ## Access Methods
 
@@ -143,7 +174,7 @@ The `docker-data` volume persists pulled images and build cache across container
 │  └────┬────┘  └────┬─────┘  └────┬───┘  │
 │       └──────┬──────┘─────────────┘      │
 │           Claude Code CLI                │
-│           Node.js 20 (MCP)               │
+│       Node.js 20 · Python 3 (MCP)       │
 │                                          │
 │  Volumes:                                │
 │   ~/.claude/     → claude-config vol     │

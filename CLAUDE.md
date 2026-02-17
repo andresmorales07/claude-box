@@ -15,7 +15,7 @@ The container is built on Debian bookworm-slim and layers in three main subsyste
    - `dockerd` (longrun) — Docker daemon for DinD (requires Sysbox runtime on host).
    - `user` (bundle) — depends on all of the above; ensures correct startup order.
 
-2. **Claude Code** — installed via the native installer (`curl -fsSL https://claude.ai/install.sh | bash`) as the `claude` user, with a symlink at `/usr/local/bin/claude`. Users authenticate interactively via `claude` (login link flow); credentials persist in the `claude-home` volume. Node.js 20 LTS is included for MCP server support.
+2. **Claude Code** — installed via the native installer (`curl -fsSL https://claude.ai/install.sh | bash`) as the `claude` user, with a symlink at `/usr/local/bin/claude`. Users authenticate interactively via `claude` (login link flow); credentials persist in the `claude-home` volume. Node.js 20 LTS is included for MCP server support. Python 3, uv, and uvx are included for Python-based MCP servers.
 
 3. **Networking** — three exposed ports:
    - `2222` — SSH access (`ssh -p 2222 claude@<host>`)
@@ -98,6 +98,7 @@ Users authenticate interactively by running `claude` inside the container and fo
 - Two Docker volumes: `claude-home` (/home/claude) and `docker-data` (/var/lib/docker)
 - s6-overlay v3 service types: `oneshot` for init, `longrun` for sshd/ttyd, `bundle` for user
 - `S6_KEEP_ENV=1` ensures environment variables propagate to all services
+- When adding or removing software from the Dockerfile, update the "What's Included" table in README.md to match
 
 ## Testing Strategy
 
