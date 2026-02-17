@@ -6,4 +6,5 @@ exec s6-setuidgid claude \
     --port 7681 \
     --cwd /home/claude/workspace \
     --credential "${TTYD_USERNAME}:${TTYD_PASSWORD}" \
+    -t rendererType=canvas \
     /bin/bash -l

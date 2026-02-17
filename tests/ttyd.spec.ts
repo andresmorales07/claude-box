@@ -7,7 +7,8 @@ test('ttyd web terminal loads', async ({ page }) => {
   await expect(terminal).toBeVisible({ timeout: 15000 });
 });
 
-test('ttyd terminal has a canvas renderer', async ({ page }) => {
+test('ttyd terminal has a canvas renderer', async ({ page, browserName }) => {
+  test.skip(browserName === 'webkit', 'WebKit uses DOM renderer instead of canvas');
   await page.goto('/');
   // xterm.js renders terminal content on a canvas element
   const canvas = page.locator('.xterm canvas');
