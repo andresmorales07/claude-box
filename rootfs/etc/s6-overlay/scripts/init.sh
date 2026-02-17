@@ -55,7 +55,7 @@ if [ -n "$DOTFILES_REPO" ] && [ ! -d /home/claude/dotfiles ]; then
 fi
 
 # Seed default dotfiles on fresh volumes (don't overwrite user customizations)
-for f in .bashrc .profile; do
+for f in .bashrc .profile .tmux.conf; do
     if [ ! -f "/home/claude/$f" ] && [ -f "/etc/skel/$f" ]; then
         cp "/etc/skel/$f" "/home/claude/$f"
     fi
