@@ -1,6 +1,20 @@
 # Claude Box
 
-Dockerized Claude Code with multi-machine access. Configure once, connect from anywhere via SSH or browser. Supports Docker-in-Docker via [Sysbox](https://github.com/nestybox/sysbox) for secure container builds inside the sandbox.
+A persistent, self-hosted Claude Code environment you can access from any machine. Run it on a server, VPS, or homelab — then connect via SSH, Mosh, web browser, or Tailscale VPN from wherever you are.
+
+Unlike ephemeral sandboxes (like [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/claude-code/)) that spin up for a single task and disappear, Claude Box is a **long-lived workstation**. Your files, Claude credentials, MCP servers, dotfiles, and Docker images all persist across restarts. Think of it as your personal cloud dev machine with Claude Code built in.
+
+## Why Claude Box?
+
+| | Ephemeral sandboxes | Claude Box |
+|---|---|---|
+| **Lifecycle** | Task-scoped, disposable | Persistent — pick up where you left off |
+| **Access** | Local only | SSH, Mosh, web terminal, Tailscale VPN |
+| **Customization** | Pre-set image | Full Linux env with sudo, dotfiles, any tooling |
+| **Docker-in-Docker** | Limited or none | Full DinD via [Sysbox](https://github.com/nestybox/sysbox) |
+| **Requires** | Docker Desktop | Any Linux host with Docker Engine |
+
+**Use Claude Box when** you want a stable, remotely-accessible Claude Code environment. **Use ephemeral sandboxes when** you need fire-and-forget agent runs with strong isolation for untrusted code.
 
 ## Prerequisites
 
@@ -59,6 +73,8 @@ The container comes pre-installed with:
 
 ## Access Methods
 
+Connect from any machine — all access methods work both locally and remotely (via Tailscale or any network route to the host).
+
 ### SSH (port 2222)
 
 ```bash
@@ -74,6 +90,14 @@ ssh-copy-id -p 2222 claude@localhost
 ### Web Terminal (port 7681)
 
 Open `http://localhost:7681` in your browser. Authenticate with `TTYD_USERNAME` / `TTYD_PASSWORD` from your `.env`.
+
+### Mosh (UDP 60000-60003)
+
+Resilient connection that survives WiFi switches, VPN reconnects, and laptop sleep/wake:
+
+```bash
+mosh --ssh='ssh -p 2222' claude@localhost
+```
 
 ### Direct Shell
 
