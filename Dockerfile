@@ -115,9 +115,11 @@ COPY rootfs/ /
 
 # Make scripts executable
 RUN chmod +x /etc/s6-overlay/scripts/init.sh \
+    && chmod +x /etc/s6-overlay/scripts/tailscaled-up.sh \
     && chmod +x /etc/s6-overlay/s6-rc.d/sshd/run \
     && chmod +x /etc/s6-overlay/s6-rc.d/ttyd/run \
-    && chmod +x /etc/s6-overlay/s6-rc.d/dockerd/run
+    && chmod +x /etc/s6-overlay/s6-rc.d/dockerd/run \
+    && chmod +x /etc/s6-overlay/s6-rc.d/tailscaled/run
 
 # Set environment for Claude
 ENV S6_KEEP_ENV=1
