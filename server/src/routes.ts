@@ -89,8 +89,8 @@ export async function handleRequest(
       json(res, 400, { error: msg });
       return;
     }
-    if (!parsed.prompt || typeof parsed.prompt !== "string") {
-      json(res, 400, { error: "prompt is required" });
+    if (parsed.prompt !== undefined && typeof parsed.prompt !== "string") {
+      json(res, 400, { error: "prompt must be a string" });
       return;
     }
     try {

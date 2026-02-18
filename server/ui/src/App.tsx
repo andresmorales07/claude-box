@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { SessionList } from "./components/SessionList";
 import { ChatView } from "./components/ChatView";
 import { FolderPicker } from "./components/FolderPicker";
@@ -10,6 +10,23 @@ export function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [cwd, setCwd] = useState("/home/claude/workspace");
+
+  const startSession = useCallback(async (sessionCwd: string) => {
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd: sessionCwd }),
+      });
+      if (res.ok) {
+        const session = await res.json();
+        setActiveSessionId(session.id);
+        setShowSidebar(false);
+      }
+    } catch (err) {
+      console.error("Failed to start session:", err);
+    }
+  }, [token]);
 
   if (!authenticated) {
     return <LoginPage token={token} setToken={setToken} onLogin={() => setAuthenticated(true)} />;
@@ -25,7 +42,7 @@ export function App() {
       </header>
       <div className="app-layout">
         <aside className={`sidebar ${showSidebar ? "open" : ""}`}>
-          <FolderPicker token={token} cwd={cwd} onCwdChange={setCwd} />
+          <FolderPicker token={token} cwd={cwd} onCwdChange={setCwd} onStartSession={startSession} />
           <SessionList token={token} cwd={cwd} activeSessionId={activeSessionId} onSelectSession={(id) => { setActiveSessionId(id); setShowSidebar(false); }} />
         </aside>
         <main className="main-panel">
