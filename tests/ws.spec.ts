@@ -93,8 +93,9 @@ test('authenticates and receives replay + status', async () => {
         return;
       }
       messages.push(msg);
-      // We expect replay_complete then status — resolve once we have status
-      if (msg.type === 'status') {
+      // Resolve once we have both expected messages
+      const types = messages.map((m) => m.type);
+      if (types.includes('replay_complete') && types.includes('status')) {
         ws.close();
         resolve();
       }

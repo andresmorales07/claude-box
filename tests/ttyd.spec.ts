@@ -53,8 +53,7 @@ test('ttyd WebSocket connection stays alive', async ({ page }) => {
   await expect(page.locator('textarea.xterm-helper-textarea')).toBeAttached();
 });
 
-test('ttyd WebSocket connects and receives data', async ({ page, request, browserName }) => {
-  test.skip(browserName === 'webkit', 'WebKit does not forward httpCredentials to WebSocket connections from page.evaluate');
+test('ttyd WebSocket connects and receives data', async ({ page, request }) => {
   await page.goto('/');
   await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
 

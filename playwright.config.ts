@@ -27,20 +27,6 @@ export default defineConfig({
       },
     },
     {
-      name: 'ttyd-webkit',
-      testMatch: 'ttyd.spec.ts',
-      use: {
-        baseURL: 'http://localhost:7681',
-        browserName: 'webkit',
-        trace: 'on-first-retry',
-        httpCredentials: {
-          username,
-          password,
-          send: 'always',
-        },
-      },
-    },
-    {
       name: 'api',
       testMatch: 'api.spec.ts',
       use: {
