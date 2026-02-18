@@ -1,4 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { readdir } from "node:fs/promises";
+import { resolve } from "node:path";
 import { authenticateRequest, sendUnauthorized } from "./auth.js";
 import {
   listSessions,
@@ -13,6 +15,8 @@ import type { CreateSessionRequest } from "./types.js";
 const startTime = Date.now();
 
 const SESSION_ID_RE = /^\/api\/sessions\/([0-9a-f-]{36})$/;
+
+const BROWSE_ROOT = "/home/claude/workspace";
 
 function json(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -129,6 +133,35 @@ export async function handleRequest(
       return;
     }
     json(res, 200, { status: "interrupted" });
+    return;
+  }
+
+  // GET /api/browse — list subdirectories for folder picker
+  if (pathname === "/api/browse" && method === "GET") {
+    const relPath = url.searchParams.get("path") ?? "";
+
+    const absPath = resolve(BROWSE_ROOT, relPath);
+    if (absPath !== BROWSE_ROOT && !absPath.startsWith(BROWSE_ROOT + "/")) {
+      json(res, 400, { error: "invalid path" });
+      return;
+    }
+
+    try {
+      const entries = await readdir(absPath, { withFileTypes: true });
+      const dirs = entries
+        .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules")
+        .map((e) => e.name)
+        .sort((a, b) => a.localeCompare(b));
+      json(res, 200, { path: relPath, dirs });
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" || code === "ENOTDIR") {
+        json(res, 404, { error: "directory not found" });
+      } else {
+        console.error("browse error:", err);
+        json(res, 500, { error: "internal server error" });
+      }
+    }
     return;
   }
 
