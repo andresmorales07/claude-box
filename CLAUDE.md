@@ -13,7 +13,7 @@ The container is built on Debian bookworm-slim and layers in three main subsyste
    - `sshd` (longrun) — OpenSSH daemon on port 2222.
    - `ttyd` (longrun) — web terminal on port 7681 (basic-auth via `TTYD_USERNAME`/`TTYD_PASSWORD`).
    - `dockerd` (longrun) — Docker daemon for DinD (requires Sysbox runtime on host).
-   - `api` (longrun) — REST + WebSocket API server on port 8080, serves React web UI.
+   - `api` (longrun) — REST + WebSocket API server on port 8080, serves React web UI. Uses a provider abstraction layer (`server/src/providers/`) so the SDK is isolated behind a `ProviderAdapter` interface — only `claude-adapter.ts` imports from `@anthropic-ai/claude-agent-sdk`.
    - `user` (bundle) — depends on all of the above; ensures correct startup order.
 
 2. **Claude Code** — installed via the native installer (`curl -fsSL https://claude.ai/install.sh | bash`) as the `claude` user, with a symlink at `/usr/local/bin/claude`. Users authenticate interactively via `claude` (login link flow); credentials persist in the `claude-home` volume. Node.js 20 LTS is included for MCP server support. Python 3, uv, and uvx are included for Python-based MCP servers.
@@ -56,10 +56,14 @@ Two Docker volumes persist state across container restarts:
 │   ├── src/                # Server source (TypeScript)
 │   │   ├── index.ts        # Entry point: HTTP + WS server
 │   │   ├── auth.ts         # Bearer token auth (API_PASSWORD)
-│   │   ├── sessions.ts     # Session manager + SDK integration
+│   │   ├── sessions.ts     # Session manager (provider-agnostic)
 │   │   ├── routes.ts       # REST route handlers (sessions, browse)
 │   │   ├── ws.ts           # WebSocket handler
-│   │   └── types.ts        # Shared TypeScript interfaces
+│   │   ├── types.ts        # Shared TypeScript interfaces
+│   │   └── providers/      # Provider abstraction layer
+│   │       ├── types.ts    # NormalizedMessage, ProviderAdapter interface
+│   │       ├── claude-adapter.ts  # Claude SDK adapter (sole SDK import)
+│   │       └── index.ts    # Provider registry
 │   └── ui/                 # React web UI (Vite)
 │       ├── package.json    # UI dependencies
 │       ├── vite.config.ts  # Vite config (builds to ../public/)
@@ -67,6 +71,7 @@ Two Docker volumes persist state across container restarts:
 │           ├── main.tsx            # React entry point
 │           ├── App.tsx             # App shell, login, sidebar layout
 │           ├── styles.css          # All styles (dark theme)
+│           ├── types.ts            # UI-side normalized message types
 │           ├── hooks/
 │           │   └── useSession.ts   # WebSocket session hook
 │           └── components/
@@ -149,6 +154,7 @@ Note: Without Sysbox, Docker-in-Docker will not work inside the nested container
 - When adding or removing software from the Dockerfile, update the "What's Included" table in README.md to match
 - Tailscale and dotfiles are opt-in features controlled by env vars (`TS_AUTHKEY`, `DOTFILES_REPO`)
 - `docker-compose.yml` includes `cap_add: NET_ADMIN` and `/dev/net/tun` device for Tailscale kernel TUN mode; harmless when Tailscale is not enabled
+- The Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) must only be imported in `server/src/providers/claude-adapter.ts`. All other server and UI code uses the normalized `NormalizedMessage` / `ProviderAdapter` types from `providers/types.ts`. The WebSocket protocol sends `{ type: "message" }` events with normalized payloads.
 
 ## Testing Strategy
 

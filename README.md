@@ -55,7 +55,7 @@ The container comes pre-installed with:
 | Category | Software | Purpose |
 |----------|----------|---------|
 | **AI** | Claude Code | Anthropic's CLI agent |
-| | Web UI + API | Claude Code web interface and REST/WebSocket API (port 8080) |
+| | Web UI + API | Claude Code web interface and REST/WebSocket API (port 8080), provider-agnostic architecture |
 | **Runtimes** | Node.js 20 LTS | MCP servers (npx) |
 | | Python 3 + venv | MCP servers (uvx) |
 | | .NET SDK 8.0, 9.0, 10.0 | Side-by-side; selected via `global.json` |
@@ -256,8 +256,11 @@ The `docker-data` volume persists pulled images and build cache across container
 │  │  api   │ │  sshd   │ │ ttyd  │ │dockerd│ │tailscaled│ │
 │  │ :8080  │ │  :2222  │ │ :7681 │ │ DinD  │ │(opt-in)  │ │
 │  └────┬───┘ └────┬────┘ └───┬───┘ └───┬──┘ └────┬─────┘ │
-│       └──────┬───┘──────────┘─────────┘──────────┘       │
-│           Claude Code CLI                                │
+│       │          │          │         │          │       │
+│  ┌────┴──────────┴──────────┴─────────┴──────────┘       │
+│  │  Provider Abstraction Layer (NormalizedMessage)        │
+│  │  └─ ClaudeAdapter → Claude Code CLI                   │
+│  └───────────────────────────────────────────────────┘   │
 │       Node.js 20 · Python 3 (MCP)                       │
 │                                                          │
 │  Volumes:                                                │
