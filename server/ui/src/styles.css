@@ -468,6 +468,99 @@ body {
   color: var(--text-muted);
 }
 
+/* === Folder Picker === */
+.folder-picker {
+  border-bottom: 1px solid var(--border);
+}
+
+.folder-picker-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.folder-picker-toggle:hover {
+  background: var(--bg-input);
+}
+
+.folder-icon {
+  flex-shrink: 0;
+  font-size: 0.625rem;
+  color: var(--text-muted);
+}
+
+.folder-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.breadcrumb-segment.clickable {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+.breadcrumb-segment.clickable:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.breadcrumb-sep {
+  color: var(--text-muted);
+  margin: 0 0.25rem;
+  font-size: 0.75rem;
+}
+
+/* Last breadcrumb segment is the current directory — highlight it */
+.folder-breadcrumb > span:last-child .breadcrumb-segment,
+.folder-breadcrumb > .breadcrumb-segment:only-child {
+  color: var(--text);
+}
+
+.folder-picker-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+.folder-picker-item {
+  display: block;
+  width: 100%;
+  padding: 0.375rem 0.75rem 0.375rem 1.5rem;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 0.8125rem;
+  font-family: var(--mono);
+  cursor: pointer;
+  text-align: left;
+}
+
+.folder-picker-item:hover {
+  background: var(--bg-input);
+  color: var(--accent);
+}
+
+.folder-picker-loading,
+.folder-picker-empty {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 /* === Desktop Layout (768px+) === */
 @media (min-width: 768px) {
   .menu-btn {
