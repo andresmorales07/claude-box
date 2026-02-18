@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { SessionList } from "./components/SessionList";
 import { ChatView } from "./components/ChatView";
 import { FolderPicker } from "./components/FolderPicker";
@@ -11,7 +11,7 @@ export function App() {
   const [showSidebar, setShowSidebar] = useState(false);
   const [cwd, setCwd] = useState("/home/claude/workspace");
 
-  const startSession = async (sessionCwd: string) => {
+  const startSession = useCallback(async (sessionCwd: string) => {
     try {
       const res = await fetch("/api/sessions", {
         method: "POST",
@@ -26,7 +26,7 @@ export function App() {
     } catch (err) {
       console.error("Failed to start session:", err);
     }
-  };
+  }, [token]);
 
   if (!authenticated) {
     return <LoginPage token={token} setToken={setToken} onLogin={() => setAuthenticated(true)} />;

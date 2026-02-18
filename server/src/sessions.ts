@@ -15,7 +15,8 @@ setInterval(() => {
   const now = Date.now();
   for (const [id, s] of sessions) {
     const isFinished = s.status === "completed" || s.status === "error" || s.status === "interrupted";
-    if (isFinished && s.clients.size === 0 && now - s.createdAt.getTime() > SESSION_TTL_MS) {
+    const isAbandonedIdle = s.status === "idle" && s.clients.size === 0;
+    if ((isFinished || isAbandonedIdle) && s.clients.size === 0 && now - s.createdAt.getTime() > SESSION_TTL_MS) {
       sessions.delete(id);
     }
   }
