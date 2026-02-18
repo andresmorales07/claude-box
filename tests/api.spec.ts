@@ -125,3 +125,33 @@ test('returns 404 for non-UUID session path', async ({ request }) => {
   const body = await res.json();
   expect(body.error).toBe('not found');
 });
+
+test('browse returns directories at root', async ({ request }) => {
+  const res = await request.get('/api/browse');
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(body).toHaveProperty('path', '');
+  expect(body).toHaveProperty('dirs');
+  expect(Array.isArray(body.dirs)).toBe(true);
+});
+
+test('browse rejects path traversal', async ({ request }) => {
+  const res = await request.get('/api/browse?path=../../etc');
+  expect(res.status()).toBe(400);
+  const body = await res.json();
+  expect(body.error).toBe('invalid path');
+});
+
+test('browse returns 404 for nonexistent path', async ({ request }) => {
+  const res = await request.get('/api/browse?path=nonexistent-dir-abc123');
+  expect(res.status()).toBe(404);
+  const body = await res.json();
+  expect(body.error).toBe('directory not found');
+});
+
+test('browse requires auth', async ({ request }) => {
+  const res = await request.get('/api/browse', {
+    headers: { Authorization: '' },
+  });
+  expect(res.status()).toBe(401);
+});
