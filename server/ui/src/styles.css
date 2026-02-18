@@ -561,6 +561,41 @@ body {
   color: var(--text-muted);
 }
 
+.folder-picker-header {
+  display: flex;
+  align-items: center;
+}
+
+.folder-picker-header .folder-picker-toggle {
+  flex: 1;
+  min-width: 0;
+}
+
+.folder-picker-item-row {
+  display: flex;
+  align-items: center;
+}
+
+.folder-picker-item-row .folder-picker-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.folder-picker-start {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.625rem;
+  cursor: pointer;
+  padding: 0.375rem 0.625rem;
+  line-height: 1;
+}
+
+.folder-picker-start:hover {
+  color: var(--success);
+}
+
 /* === Desktop Layout (768px+) === */
 @media (min-width: 768px) {
   .menu-btn {

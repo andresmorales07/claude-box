@@ -4,11 +4,12 @@ interface Props {
   token: string;
   cwd: string;
   onCwdChange: (cwd: string) => void;
+  onStartSession: (cwd: string) => void;
 }
 
 const BROWSE_ROOT = "/home/claude/workspace";
 
-export function FolderPicker({ token, cwd, onCwdChange }: Props) {
+export function FolderPicker({ token, cwd, onCwdChange, onStartSession }: Props) {
   const [open, setOpen] = useState(false);
   const [dirs, setDirs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,51 +53,73 @@ export function FolderPicker({ token, cwd, onCwdChange }: Props) {
 
   return (
     <div className="folder-picker">
-      <button
-        className="folder-picker-toggle"
-        onClick={() => setOpen(!open)}
-        type="button"
-      >
-        <span className="folder-icon">{open ? "\u25BE" : "\u25B8"}</span>
-        <span className="folder-breadcrumb">
-          <span
-            className="breadcrumb-segment clickable"
-            onClick={(e) => { e.stopPropagation(); navigateTo(""); }}
-          >
-            workspace
-          </span>
-          {segments.map((seg, i) => (
-            <span key={i}>
-              <span className="breadcrumb-sep">/</span>
-              <span
-                className="breadcrumb-segment clickable"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigateTo(segments.slice(0, i + 1).join("/"));
-                }}
-              >
-                {seg}
-              </span>
+      <div className="folder-picker-header">
+        <button
+          className="folder-picker-toggle"
+          onClick={() => setOpen(!open)}
+          type="button"
+        >
+          <span className="folder-icon">{open ? "\u25BE" : "\u25B8"}</span>
+          <span className="folder-breadcrumb">
+            <span
+              className="breadcrumb-segment clickable"
+              onClick={(e) => { e.stopPropagation(); navigateTo(""); }}
+            >
+              workspace
             </span>
-          ))}
-        </span>
-      </button>
+            {segments.map((seg, i) => (
+              <span key={i}>
+                <span className="breadcrumb-sep">/</span>
+                <span
+                  className="breadcrumb-segment clickable"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigateTo(segments.slice(0, i + 1).join("/"));
+                  }}
+                >
+                  {seg}
+                </span>
+              </span>
+            ))}
+          </span>
+        </button>
+        <button
+          className="folder-picker-start"
+          onClick={() => onStartSession(cwd)}
+          type="button"
+          title="Start session here"
+        >
+          &#9654;
+        </button>
+      </div>
       {open && (
         <div className="folder-picker-list">
           {loading && <div className="folder-picker-loading">Loading...</div>}
           {!loading && dirs.length === 0 && (
             <div className="folder-picker-empty">No subdirectories</div>
           )}
-          {!loading && dirs.map((dir) => (
-            <button
-              key={dir}
-              className="folder-picker-item"
-              onClick={() => navigateTo(relPath ? `${relPath}/${dir}` : dir)}
-              type="button"
-            >
-              {dir}
-            </button>
-          ))}
+          {!loading && dirs.map((dir) => {
+            const dirCwd = relPath ? `${BROWSE_ROOT}/${relPath}/${dir}` : `${BROWSE_ROOT}/${dir}`;
+            return (
+              <div key={dir} className="folder-picker-item-row">
+                <button
+                  className="folder-picker-item"
+                  onClick={() => navigateTo(relPath ? `${relPath}/${dir}` : dir)}
+                  type="button"
+                >
+                  {dir}
+                </button>
+                <button
+                  className="folder-picker-start"
+                  onClick={() => onStartSession(dirCwd)}
+                  type="button"
+                  title="Start session in this folder"
+                >
+                  &#9654;
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
