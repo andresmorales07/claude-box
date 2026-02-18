@@ -131,7 +131,8 @@ COPY server/src/ /opt/api-server/src/
 RUN npx tsc && npm prune --production
 
 # Copy built UI into server's public directory
-RUN cp -r /tmp/ui/dist /opt/api-server/public && rm -rf /tmp/ui
+# Vite outputs to ../public relative to /tmp/ui, which is /tmp/public
+RUN cp -r /tmp/public /opt/api-server/public && rm -rf /tmp/ui /tmp/public
 
 WORKDIR /
 
