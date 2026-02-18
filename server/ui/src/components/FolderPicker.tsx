@@ -30,9 +30,12 @@ export function FolderPicker({ token, cwd, onCwdChange }: Props) {
       if (res.ok) {
         const body = await res.json();
         setDirs(body.dirs);
+      } else {
+        setDirs([]);
       }
     } catch (err) {
       console.error("Failed to browse:", err);
+      setDirs([]);
     } finally {
       setLoading(false);
     }

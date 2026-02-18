@@ -155,3 +155,14 @@ test('browse requires auth', async ({ request }) => {
   });
   expect(res.status()).toBe(401);
 });
+
+test('session respects cwd from request', async ({ request }) => {
+  const res = await request.post('/api/sessions', {
+    data: { prompt: 'pwd', cwd: '/home/claude/workspace' },
+  });
+  expect(res.status()).toBe(201);
+  const { id } = await res.json();
+  const detail = await request.get(`/api/sessions/${id}`);
+  const session = await detail.json();
+  expect(session.cwd).toBe('/home/claude/workspace');
+});

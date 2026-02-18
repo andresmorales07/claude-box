@@ -140,6 +140,11 @@ export async function handleRequest(
   if (pathname === "/api/browse" && method === "GET") {
     const relPath = url.searchParams.get("path") ?? "";
 
+    if (relPath.includes("\0")) {
+      json(res, 400, { error: "invalid path" });
+      return;
+    }
+
     const absPath = resolve(BROWSE_ROOT, relPath);
     if (absPath !== BROWSE_ROOT && !absPath.startsWith(BROWSE_ROOT + "/")) {
       json(res, 400, { error: "invalid path" });
@@ -157,6 +162,8 @@ export async function handleRequest(
       const code = (err as NodeJS.ErrnoException).code;
       if (code === "ENOENT" || code === "ENOTDIR") {
         json(res, 404, { error: "directory not found" });
+      } else if (code === "EACCES") {
+        json(res, 403, { error: "permission denied" });
       } else {
         console.error("browse error:", err);
         json(res, 500, { error: "internal server error" });
