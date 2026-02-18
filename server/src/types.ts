@@ -1,4 +1,4 @@
-import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
+import type { PermissionMode, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import type { WebSocket } from "ws";
 
 export interface Session {
@@ -22,7 +22,7 @@ export interface PendingApproval {
   toolName: string;
   toolUseId: string;
   input: unknown;
-  resolve: (decision: { behavior: "allow" | "deny"; message?: string }) => void;
+  resolve: (decision: PermissionResult) => void;
 }
 
 export type ClientMessage =
