@@ -156,6 +156,8 @@ async function runSession(
         }),
     });
 
+    // Manual iteration instead of for-await because we need the generator's
+    // return value (ProviderSessionResult with cost/turns), which for-await discards.
     let result: IteratorResult<NormalizedMessage, ProviderSessionResult>;
     while (!(result = await generator.next()).done) {
       session.messages.push(result.value);

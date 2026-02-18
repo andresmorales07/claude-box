@@ -16,16 +16,6 @@ import type {
   MessagePart,
 } from "./types.js";
 
-let messageIndex = 0;
-
-function resetIndex(): void {
-  messageIndex = 0;
-}
-
-function nextIndex(): number {
-  return messageIndex++;
-}
-
 interface ContentBlock {
   type: string;
   text?: string;
@@ -35,7 +25,7 @@ interface ContentBlock {
   thinking?: string;
 }
 
-function normalizeAssistant(msg: SDKAssistantMessage): NormalizedMessage | null {
+function normalizeAssistant(msg: SDKAssistantMessage, index: number): NormalizedMessage | null {
   const content = msg.message?.content;
   if (!Array.isArray(content)) return null;
 
@@ -64,10 +54,10 @@ function normalizeAssistant(msg: SDKAssistantMessage): NormalizedMessage | null 
   }
 
   if (parts.length === 0) return null;
-  return { role: "assistant", parts, index: nextIndex() };
+  return { role: "assistant", parts, index };
 }
 
-function normalizeUser(msg: SDKUserMessage | SDKUserMessageReplay): NormalizedMessage | null {
+function normalizeUser(msg: SDKUserMessage | SDKUserMessageReplay, index: number): NormalizedMessage | null {
   const inner = msg.message;
   if (!inner) return null;
 
@@ -104,10 +94,10 @@ function normalizeUser(msg: SDKUserMessage | SDKUserMessageReplay): NormalizedMe
   }
 
   if (parts.length === 0) return null;
-  return { role: "user", parts, index: nextIndex() };
+  return { role: "user", parts, index };
 }
 
-function normalizeResult(msg: SDKResultMessage): NormalizedMessage {
+function normalizeResult(msg: SDKResultMessage, index: number): NormalizedMessage {
   return {
     role: "system",
     event: {
@@ -115,18 +105,18 @@ function normalizeResult(msg: SDKResultMessage): NormalizedMessage {
       totalCostUsd: msg.total_cost_usd,
       numTurns: msg.num_turns,
     },
-    index: nextIndex(),
+    index,
   };
 }
 
-function normalizeMessage(msg: SDKMessage): NormalizedMessage | null {
+function normalizeMessage(msg: SDKMessage, index: number): NormalizedMessage | null {
   switch (msg.type) {
     case "assistant":
-      return normalizeAssistant(msg as SDKAssistantMessage);
+      return normalizeAssistant(msg as SDKAssistantMessage, index);
     case "user":
-      return normalizeUser(msg as SDKUserMessage | SDKUserMessageReplay);
+      return normalizeUser(msg as SDKUserMessage | SDKUserMessageReplay, index);
     case "result":
-      return normalizeResult(msg as SDKResultMessage);
+      return normalizeResult(msg as SDKResultMessage, index);
     default:
       return null;
   }
@@ -139,7 +129,8 @@ export class ClaudeAdapter implements ProviderAdapter {
   async *run(
     options: ProviderSessionOptions,
   ): AsyncGenerator<NormalizedMessage, ProviderSessionResult, undefined> {
-    resetIndex();
+    // Per-invocation index counter (safe for concurrent sessions)
+    let messageIndex = 0;
 
     // Bridge AbortSignal → AbortController for the SDK
     const abortController = new AbortController();
@@ -204,8 +195,9 @@ export class ClaudeAdapter implements ProviderAdapter {
           }
         }
 
-        const normalized = normalizeMessage(sdkMessage);
+        const normalized = normalizeMessage(sdkMessage, messageIndex);
         if (normalized) {
+          messageIndex++;
           yield normalized;
         }
       }
