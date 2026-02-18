@@ -1,14 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-interface ServerMessage {
-  type: string;
-  message?: unknown;
-  status?: string;
-  error?: string;
-  toolName?: string;
-  toolUseId?: string;
-  input?: unknown;
-}
+type ServerMessage =
+  | { type: "sdk_message"; message: unknown }
+  | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown }
+  | { type: "status"; status: string; error?: string }
+  | { type: "replay_complete" }
+  | { type: "ping" }
+  | { type: "error"; message: string; error?: string };
 
 interface SessionHook {
   messages: unknown[];
@@ -36,8 +34,13 @@ export function useSession(sessionId: string | null, token: string): SessionHook
   const connect = useCallback(() => {
     if (!sessionId || !token) return;
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${location.host}/api/sessions/${sessionId}/stream?token=${encodeURIComponent(token)}`);
-    ws.onopen = () => { setConnected(true); reconnectAttempts.current = 0; };
+    const ws = new WebSocket(`${protocol}//${location.host}/api/sessions/${sessionId}/stream`);
+    ws.onopen = () => {
+      // Authenticate via first message (avoids token in URL / logs)
+      ws.send(JSON.stringify({ type: "auth", token }));
+      setConnected(true);
+      reconnectAttempts.current = 0;
+    };
     ws.onmessage = (event) => {
       let msg: ServerMessage;
       try {
@@ -48,10 +51,10 @@ export function useSession(sessionId: string | null, token: string): SessionHook
       }
       switch (msg.type) {
         case "sdk_message": setMessages((prev) => [...prev, msg.message]); break;
-        case "status": setStatus(msg.status!); break;
-        case "tool_approval_request": setPendingApproval({ toolName: msg.toolName!, toolUseId: msg.toolUseId!, input: msg.input }); break;
+        case "status": setStatus(msg.status); break;
+        case "tool_approval_request": setPendingApproval({ toolName: msg.toolName, toolUseId: msg.toolUseId, input: msg.input }); break;
         case "replay_complete": break;
-        case "error": console.error("Server error:", msg.error ?? msg.message); break;
+        case "error": console.error("Server error:", msg.message); break;
         case "ping": break;
       }
     };

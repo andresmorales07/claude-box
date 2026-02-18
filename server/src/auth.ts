@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { URL } from "node:url";
 import { timingSafeEqual } from "node:crypto";
 
 const API_PASSWORD = process.env.API_PASSWORD;
@@ -22,9 +21,7 @@ export function authenticateRequest(req: IncomingMessage): boolean {
   return safeCompare(auth.slice(7), API_PASSWORD!);
 }
 
-export function authenticateWs(url: URL): boolean {
-  const token = url.searchParams.get("token");
-  if (!token) return false;
+export function authenticateToken(token: string): boolean {
   return safeCompare(token, API_PASSWORD!);
 }
 

@@ -61,5 +61,23 @@ export default defineConfig({
         trace: 'on-first-retry',
       },
     },
+    {
+      name: 'static',
+      testMatch: 'static.spec.ts',
+      use: {
+        baseURL: 'http://localhost:8080',
+        browserName: 'chromium',
+        trace: 'on-first-retry',
+      },
+    },
+    {
+      name: 'ws',
+      testMatch: 'ws.spec.ts',
+      use: {
+        baseURL: 'http://localhost:8080',
+        browserName: 'chromium',
+        trace: 'on-first-retry',
+      },
+    },
   ],
 });

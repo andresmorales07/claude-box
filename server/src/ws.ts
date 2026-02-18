@@ -1,8 +1,11 @@
 import type { WebSocket } from "ws";
+import { authenticateToken } from "./auth.js";
 import { getSession, broadcast, handleApproval, sendFollowUp, interruptSession } from "./sessions.js";
 import type { ClientMessage, ServerMessage } from "./types.js";
 
 const WS_PATH_RE = /^\/api\/sessions\/([0-9a-f-]{36})\/stream$/;
+
+const AUTH_TIMEOUT_MS = 10_000;
 
 export function extractSessionIdFromPath(pathname: string): string | null {
   const match = pathname.match(WS_PATH_RE);
@@ -10,6 +13,44 @@ export function extractSessionIdFromPath(pathname: string): string | null {
 }
 
 export function handleWsConnection(ws: WebSocket, sessionId: string): void {
+  // First message must be { type: "auth", token: "..." }
+  // This avoids leaking the token in the URL / query string.
+  const authTimeout = setTimeout(() => {
+    const msg: ServerMessage = { type: "error", message: "auth timeout" };
+    ws.send(JSON.stringify(msg));
+    ws.close(4001, "auth timeout");
+  }, AUTH_TIMEOUT_MS);
+
+  ws.once("message", (data: Buffer | string) => {
+    clearTimeout(authTimeout);
+
+    let parsed: { type: string; token?: string };
+    try {
+      parsed = JSON.parse(typeof data === "string" ? data : data.toString());
+    } catch {
+      const msg: ServerMessage = { type: "error", message: "invalid JSON" };
+      ws.send(JSON.stringify(msg));
+      ws.close(4002, "invalid JSON");
+      return;
+    }
+
+    if (parsed.type !== "auth" || !parsed.token || !authenticateToken(parsed.token)) {
+      const msg: ServerMessage = { type: "error", message: "unauthorized" };
+      ws.send(JSON.stringify(msg));
+      ws.close(4001, "unauthorized");
+      return;
+    }
+
+    // Auth succeeded — set up the session connection
+    setupSessionConnection(ws, sessionId);
+  });
+
+  // Clean up auth timeout on early close
+  ws.on("close", () => clearTimeout(authTimeout));
+  ws.on("error", () => clearTimeout(authTimeout));
+}
+
+function setupSessionConnection(ws: WebSocket, sessionId: string): void {
   const session = getSession(sessionId);
   if (!session) {
     const msg: ServerMessage = { type: "error", message: "session not found" };

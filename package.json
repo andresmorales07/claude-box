@@ -2,7 +2,9 @@
   "name": "claude-box",
   "private": true,
   "devDependencies": {
-    "@playwright/test": "^1.58.2"
+    "@playwright/test": "^1.58.2",
+    "@types/ws": "^8.18.1",
+    "ws": "^8.19.0"
   },
   "scripts": {
     "test": "playwright test"

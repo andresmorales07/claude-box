@@ -74,6 +74,53 @@ test('interrupts a session', async ({ request }) => {
 });
 
 test('returns 404 for unknown session', async ({ request }) => {
-  const res = await request.get('/api/sessions/nonexistent-id');
+  // Use a valid UUID format so the route regex matches — tests the 404 from session lookup, not regex mismatch
+  const res = await request.get('/api/sessions/00000000-0000-0000-0000-000000000000');
   expect(res.status()).toBe(404);
+  const body = await res.json();
+  expect(body.error).toBe('session not found');
+});
+
+test('rejects request with missing prompt', async ({ request }) => {
+  const res = await request.post('/api/sessions', {
+    data: {},
+  });
+  expect(res.status()).toBe(400);
+  const body = await res.json();
+  expect(body.error).toBe('prompt is required');
+});
+
+test('rejects request with invalid JSON body', async ({ request }) => {
+  const res = await request.post('/api/sessions', {
+    headers: { 'Content-Type': 'application/json' },
+    data: 'not json{{{',
+  });
+  expect(res.status()).toBe(400);
+  const body = await res.json();
+  expect(body.error).toBe('invalid request body');
+});
+
+test('rejects request with empty prompt', async ({ request }) => {
+  const res = await request.post('/api/sessions', {
+    data: { prompt: '' },
+  });
+  expect(res.status()).toBe(400);
+  const body = await res.json();
+  expect(body.error).toBe('prompt is required');
+});
+
+test('rejects request with non-string prompt', async ({ request }) => {
+  const res = await request.post('/api/sessions', {
+    data: { prompt: 123 },
+  });
+  expect(res.status()).toBe(400);
+  const body = await res.json();
+  expect(body.error).toBe('prompt is required');
+});
+
+test('returns 404 for non-UUID session path', async ({ request }) => {
+  const res = await request.get('/api/sessions/not-a-uuid');
+  expect(res.status()).toBe(404);
+  const body = await res.json();
+  expect(body.error).toBe('not found');
 });

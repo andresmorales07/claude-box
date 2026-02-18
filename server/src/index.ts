@@ -4,7 +4,6 @@ import { join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { requirePassword } from "./auth.js";
-import { authenticateWs } from "./auth.js";
 import { handleRequest } from "./routes.js";
 import { handleWsConnection, extractSessionIdFromPath } from "./ws.js";
 
@@ -80,20 +79,13 @@ const server = createServer(async (req, res) => {
   res.end(JSON.stringify({ error: "not found" }));
 });
 
-// WebSocket upgrade handling
+// WebSocket upgrade handling — authentication happens via first message, not URL
 const wss = new WebSocketServer({ noServer: true });
 
 server.on("upgrade", (req, socket, head) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 
-  // Authenticate WebSocket connections
-  if (!authenticateWs(url)) {
-    socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-    socket.destroy();
-    return;
-  }
-
-  // Extract session ID from path
+  // Extract session ID from path (auth happens after upgrade via first message)
   const sessionId = extractSessionIdFromPath(url.pathname);
   if (!sessionId) {
     socket.write("HTTP/1.1 404 Not Found\r\n\r\n");

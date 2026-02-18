@@ -1,19 +1,27 @@
 import { query as sdkQuery } from "@anthropic-ai/claude-agent-sdk";
 import type { Query, SDKMessage, SDKResultMessage, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
-import type { Session, PendingApproval, CreateSessionRequest, ServerMessage } from "./types.js";
+import type { Session, PendingApproval, CreateSessionRequest, ServerMessage, SessionSummaryDTO, SessionDTO } from "./types.js";
 import type { WebSocket } from "ws";
 import { randomUUID } from "node:crypto";
 
 const sessions = new Map<string, Session>();
 
-export function listSessions(): Array<{
-  id: string;
-  status: Session["status"];
-  createdAt: string;
-  numTurns: number;
-  totalCostUsd: number;
-  hasPendingApproval: boolean;
-}> {
+const MAX_SESSIONS = 50;
+const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // run every 5 minutes
+
+// Periodically evict finished sessions older than SESSION_TTL_MS
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, s] of sessions) {
+    const isFinished = s.status === "completed" || s.status === "error" || s.status === "interrupted";
+    if (isFinished && s.clients.size === 0 && now - s.createdAt.getTime() > SESSION_TTL_MS) {
+      sessions.delete(id);
+    }
+  }
+}, CLEANUP_INTERVAL_MS);
+
+export function listSessions(): SessionSummaryDTO[] {
   return Array.from(sessions.values()).map((s) => ({
     id: s.id,
     status: s.status,
@@ -22,6 +30,28 @@ export function listSessions(): Array<{
     totalCostUsd: s.totalCostUsd,
     hasPendingApproval: s.pendingApproval !== null,
   }));
+}
+
+export function sessionToDTO(session: Session): SessionDTO {
+  return {
+    id: session.id,
+    status: session.status,
+    createdAt: session.createdAt.toISOString(),
+    permissionMode: session.permissionMode,
+    model: session.model,
+    cwd: session.cwd,
+    numTurns: session.numTurns,
+    totalCostUsd: session.totalCostUsd,
+    lastError: session.lastError,
+    messages: session.messages,
+    pendingApproval: session.pendingApproval
+      ? {
+          toolName: session.pendingApproval.toolName,
+          toolUseId: session.pendingApproval.toolUseId,
+          input: session.pendingApproval.input,
+        }
+      : null,
+  };
 }
 
 export function getSession(id: string): Session | undefined {
@@ -58,6 +88,9 @@ export function broadcast(session: Session, msg: ServerMessage): void {
 export async function createSession(
   req: CreateSessionRequest,
 ): Promise<Session> {
+  if (sessions.size >= MAX_SESSIONS) {
+    throw new Error(`maximum session limit reached (${MAX_SESSIONS})`);
+  }
   const id = randomUUID();
   const session: Session = {
     id,

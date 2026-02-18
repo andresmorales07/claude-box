@@ -3,6 +3,7 @@ import { authenticateRequest, sendUnauthorized } from "./auth.js";
 import {
   listSessions,
   getSession,
+  sessionToDTO,
   getSessionCount,
   createSession,
   interruptSession,
@@ -111,25 +112,7 @@ export async function handleRequest(
       json(res, 404, { error: "session not found" });
       return;
     }
-    json(res, 200, {
-      id: session.id,
-      status: session.status,
-      createdAt: session.createdAt.toISOString(),
-      permissionMode: session.permissionMode,
-      model: session.model,
-      cwd: session.cwd,
-      numTurns: session.numTurns,
-      totalCostUsd: session.totalCostUsd,
-      lastError: session.lastError,
-      messages: session.messages,
-      pendingApproval: session.pendingApproval
-        ? {
-            toolName: session.pendingApproval.toolName,
-            toolUseId: session.pendingApproval.toolUseId,
-            input: session.pendingApproval.input,
-          }
-        : null,
-    });
+    json(res, 200, sessionToDTO(session));
     return;
   }
 
