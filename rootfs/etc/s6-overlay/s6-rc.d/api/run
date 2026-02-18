@@ -1,0 +1,4 @@
+#!/bin/bash
+exec s6-setuidgid claude \
+    s6-env HOME=/home/claude \
+    node /opt/api-server/dist/index.js
