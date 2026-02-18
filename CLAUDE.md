@@ -18,7 +18,7 @@ The container is built on Debian bookworm-slim and layers in three main subsyste
 
 2. **Claude Code** — installed via the native installer (`curl -fsSL https://claude.ai/install.sh | bash`) as the `claude` user, with a symlink at `/usr/local/bin/claude`. Users authenticate interactively via `claude` (login link flow); credentials persist in the `claude-home` volume. Node.js 20 LTS is included for MCP server support. Python 3, uv, and uvx are included for Python-based MCP servers.
 
-3. **Networking** — three exposed ports:
+3. **Networking** — four exposed ports:
    - `2222` — SSH access (`ssh -p 2222 claude@<host>`)
    - `7681` — ttyd web terminal (`http://<host>:7681`)
    - `8080` — API server + web UI (`http://<host>:8080`)
@@ -36,28 +36,51 @@ Two Docker volumes persist state across container restarts:
 ├── Dockerfile              # Debian bookworm-slim, Node.js 20, Docker Engine, s6-overlay, ttyd, Claude Code
 ├── docker-compose.yml      # Service definition (pulls from GHCR), volumes, env vars
 ├── Makefile                # build, up, down, logs, shell, ssh, clean
-├── .env.example            # Template for SSH and ttyd passwords
+├── .env.example            # Template for SSH, ttyd, and API passwords
+├── LICENSE
 ├── package.json            # Dev dependency: @playwright/test
-├── playwright.config.ts    # Playwright config (baseURL: localhost:7681, Chromium only)
+├── playwright.config.ts    # Playwright config (Chromium only)
+├── .github/workflows/
+│   ├── ci.yml              # Build + healthcheck CI
+│   └── playwright.yml      # Playwright test CI
 ├── tests/                  # Playwright e2e tests
-│   └── ttyd.spec.ts        # ttyd web terminal tests
+│   ├── ttyd.spec.ts        # ttyd web terminal tests
+│   ├── api.spec.ts         # API endpoint tests (healthz, auth, sessions, browse)
+│   ├── web-ui.spec.ts      # Web UI login/auth tests
+│   ├── ws.spec.ts          # WebSocket connection tests
+│   └── static.spec.ts      # Static file serving tests
+├── docs/plans/             # Design docs and implementation plans
 ├── server/                 # API server + web UI
 │   ├── package.json        # Server dependencies
 │   ├── tsconfig.json       # Server TypeScript config
 │   ├── src/                # Server source (TypeScript)
 │   │   ├── index.ts        # Entry point: HTTP + WS server
-│   │   ├── auth.ts         # Bearer token auth
+│   │   ├── auth.ts         # Bearer token auth (API_PASSWORD)
 │   │   ├── sessions.ts     # Session manager + SDK integration
-│   │   ├── routes.ts       # REST route handlers
+│   │   ├── routes.ts       # REST route handlers (sessions, browse)
 │   │   ├── ws.ts           # WebSocket handler
 │   │   └── types.ts        # Shared TypeScript interfaces
 │   └── ui/                 # React web UI (Vite)
 │       ├── package.json    # UI dependencies
 │       ├── vite.config.ts  # Vite config (builds to ../public/)
-│       └── src/            # React components
+│       └── src/
+│           ├── main.tsx            # React entry point
+│           ├── App.tsx             # App shell, login, sidebar layout
+│           ├── styles.css          # All styles (dark theme)
+│           ├── hooks/
+│           │   └── useSession.ts   # WebSocket session hook
+│           └── components/
+│               ├── SessionList.tsx  # Session list + new session form
+│               ├── ChatView.tsx     # Chat message view
+│               ├── MessageBubble.tsx # Message rendering
+│               ├── ToolApproval.tsx  # Tool approval UI
+│               └── FolderPicker.tsx  # Breadcrumb folder picker
 └── rootfs/                 # Files copied into the container at /
     └── etc/
         ├── ssh/sshd_config
+        ├── skel/
+        │   ├── .bashrc             # Default shell config
+        │   └── .tmux.conf          # tmux config (mosh scrollback)
         └── s6-overlay/
             ├── scripts/init.sh          # Oneshot: SSH keys, user password, volume ownership, dotfiles
             ├── scripts/tailscaled-up.sh # Oneshot: authenticate with tailnet
@@ -66,9 +89,10 @@ Two Docker volumes persist state across container restarts:
                 ├── sshd/                # Long-running SSH daemon
                 ├── ttyd/                # Long-running web terminal
                 ├── dockerd/             # Long-running Docker daemon (DinD)
+                ├── api/                 # Long-running API server
                 ├── tailscaled/          # Long-running Tailscale daemon (opt-in)
                 ├── tailscaled-up/       # Oneshot: authenticate with tailnet
-                └── user/                # Bundle: init + sshd + ttyd + dockerd + tailscaled-up
+                └── user/                # Bundle: init + sshd + ttyd + dockerd + api + tailscaled-up
 ```
 
 ## Common Commands
@@ -111,7 +135,8 @@ Note: Without Sysbox, Docker-in-Docker will not work inside the nested container
 
 ## Authentication
 
-Users authenticate interactively by running `claude` inside the container and following the login link. Credentials are stored in `~/.claude/` which is backed by the `claude-home` Docker volume, so they persist across container restarts.
+- **Claude Code** — users authenticate interactively by running `claude` inside the container and following the login link. Credentials are stored in `~/.claude/` which is backed by the `claude-home` Docker volume, so they persist across container restarts.
+- **API server** — the REST API and web UI require a bearer token set via the `API_PASSWORD` environment variable. The web UI prompts for it on the login page; API clients pass it as `Authorization: Bearer <password>`.
 
 ## Key Conventions
 
@@ -129,7 +154,13 @@ Users authenticate interactively by running `claude` inside the container and fo
 
 ### Automated tests (Playwright)
 
-Playwright e2e tests verify the ttyd web terminal. The config (`playwright.config.ts`) targets `http://localhost:7681` with basic-auth credentials and runs Chromium and WebKit.
+Playwright e2e tests cover the ttyd terminal, API endpoints, web UI, WebSocket connections, and static file serving. The config (`playwright.config.ts`) runs Chromium only. Five test projects target different services:
+
+- `ttyd-chromium` → `http://localhost:7681` (basic-auth)
+- `api` → `http://localhost:8080` (bearer token)
+- `web-ui` → `http://localhost:8080` (browser)
+- `ws` → `http://localhost:8080` (WebSocket)
+- `static` → `http://localhost:8080` (static files)
 
 **Important:** Always run tests by building and running the Docker container first — do not run them against an externally running instance. The tests depend on the container's ttyd configuration (writable mode, auth credentials, ping interval).
 
@@ -137,9 +168,10 @@ Playwright e2e tests verify the ttyd web terminal. The config (`playwright.confi
 # 1. Build and run the container
 docker build -t claude-box:latest .
 docker run -d --name claude-box-test \
-  -p 7681:7681 -p 2222:2222 \
+  -p 7681:7681 -p 2222:2222 -p 8080:8080 \
   -e TTYD_USERNAME=claude \
   -e TTYD_PASSWORD=changeme \
+  -e API_PASSWORD=changeme \
   claude-box:latest
 
 # 2. Run tests (credentials must match the container's env vars)
@@ -150,21 +182,13 @@ npx playwright test
 docker rm -f claude-box-test
 ```
 
-Tests in `tests/ttyd.spec.ts`:
-- **ttyd web terminal loads** — xterm.js container is visible
-- **ttyd terminal has a visible renderer** — canvas or DOM renderer is rendering
-- **ttyd terminal is interactive** — terminal accepts keyboard input and has an input textarea
-- **ttyd WebSocket connection stays alive** — terminal remains responsive after idle period
-- **ttyd WebSocket connects and receives data** — raw WebSocket to `/ws` receives terminal payload
-- **ttyd returns correct auth challenge** — HTTP 200 with valid credentials
+### Test files
 
-### API server tests (`tests/api.spec.ts`)
-
-Playwright `request` API context tests verifying REST endpoints: healthz, auth, session CRUD.
-
-### Web UI tests (`tests/web-ui.spec.ts`)
-
-Playwright browser automation tests verifying login page, authentication flow.
+- **`tests/ttyd.spec.ts`** — ttyd web terminal: loads xterm.js, renders, accepts input, WebSocket stays alive, auth challenge
+- **`tests/api.spec.ts`** — REST API: healthz, auth, session CRUD, browse endpoint (directory listing, path traversal rejection, auth)
+- **`tests/web-ui.spec.ts`** — Web UI: login page rendering, authentication flow
+- **`tests/ws.spec.ts`** — WebSocket: connection lifecycle, message exchange
+- **`tests/static.spec.ts`** — Static file serving: index.html, assets, SPA fallback
 
 ### Manual verification
 
