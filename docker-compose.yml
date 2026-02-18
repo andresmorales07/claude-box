@@ -11,6 +11,7 @@ services:
     ports:
       - "2222:2222"
       - "7681:7681"
+      - "8080:8080"
       - "60000-60003:60000-60003/udp"
     volumes:
       - claude-home:/home/claude
@@ -22,10 +23,11 @@ services:
       - TS_AUTHKEY=${TS_AUTHKEY:-}
       - TS_HOSTNAME=${TS_HOSTNAME:-claude-box}
       - DOTFILES_REPO=${DOTFILES_REPO:-}
+      - API_PASSWORD=${API_PASSWORD:-changeme}
       - DOTFILES_BRANCH=${DOTFILES_BRANCH:-}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -f -u \"${TTYD_USERNAME}:${TTYD_PASSWORD}\" http://localhost:7681 && docker info > /dev/null 2>&1"]
+      test: ["CMD-SHELL", "curl -f -u \"${TTYD_USERNAME}:${TTYD_PASSWORD}\" http://localhost:7681 && curl -f http://localhost:8080/healthz && docker info > /dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       retries: 3

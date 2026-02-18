@@ -115,19 +115,41 @@ RUN ln -sf /home/claude/.local/bin/claude /usr/local/bin/claude
 # Copy s6 service definitions and configs
 COPY rootfs/ /
 
+# Build web UI (Vite → static files)
+COPY server/ui/package.json server/ui/package-lock.json /tmp/ui/
+WORKDIR /tmp/ui
+RUN npm ci
+COPY server/ui/ /tmp/ui/
+RUN npm run build
+
+# Build API server (TypeScript → JS)
+COPY server/package.json server/package-lock.json /opt/api-server/
+WORKDIR /opt/api-server
+RUN npm ci
+COPY server/tsconfig.json /opt/api-server/
+COPY server/src/ /opt/api-server/src/
+RUN npx tsc && npm prune --production
+
+# Copy built UI into server's public directory
+# Vite outputs to ../public relative to /tmp/ui, which is /tmp/public
+RUN cp -r /tmp/public /opt/api-server/public && rm -rf /tmp/ui /tmp/public
+
+WORKDIR /
+
 # Make scripts executable
 RUN chmod +x /etc/s6-overlay/scripts/init.sh \
     && chmod +x /etc/s6-overlay/scripts/tailscaled-up.sh \
     && chmod +x /etc/s6-overlay/s6-rc.d/sshd/run \
     && chmod +x /etc/s6-overlay/s6-rc.d/ttyd/run \
     && chmod +x /etc/s6-overlay/s6-rc.d/dockerd/run \
-    && chmod +x /etc/s6-overlay/s6-rc.d/tailscaled/run
+    && chmod +x /etc/s6-overlay/s6-rc.d/tailscaled/run \
+    && chmod +x /etc/s6-overlay/s6-rc.d/api/run
 
 # Set environment for Claude
 ENV S6_KEEP_ENV=1
 ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 ENV CLAUDE_CONFIG_DIR=/home/claude/.claude
 
-EXPOSE 2222 7681 60000-60003/udp
+EXPOSE 2222 7681 8080 60000-60003/udp
 
 ENTRYPOINT ["/init"]
