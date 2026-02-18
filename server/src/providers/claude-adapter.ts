@@ -159,6 +159,7 @@ export class ClaudeAdapter implements ProviderAdapter {
           ...(options.resumeSessionId
             ? { resume: options.resumeSessionId }
             : {}),
+          settingSources: ["user", "project", "local"],
           includePartialMessages: true,
           canUseTool:
             options.permissionMode === "bypassPermissions"
