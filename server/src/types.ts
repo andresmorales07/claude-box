@@ -2,7 +2,7 @@ import type { NormalizedMessage, PermissionModeCommon, ApprovalDecision } from "
 import type { WebSocket } from "ws";
 
 export type SessionStatus =
-  | "starting" | "running" | "waiting_for_approval"
+  | "idle" | "starting" | "running" | "waiting_for_approval"
   | "completed" | "interrupted" | "error";
 
 export interface Session {
@@ -70,7 +70,7 @@ export type ServerMessage =
   | { type: "error"; message: string };
 
 export interface CreateSessionRequest {
-  prompt: string;
+  prompt?: string;
   permissionMode?: PermissionModeCommon;
   provider?: string;
   model?: string;

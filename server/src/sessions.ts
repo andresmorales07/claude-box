@@ -91,11 +91,12 @@ export async function createSession(
   if (sessions.size >= MAX_SESSIONS) {
     throw new Error(`maximum session limit reached (${MAX_SESSIONS})`);
   }
+  const hasPrompt = typeof req.prompt === "string" && req.prompt.length > 0;
   const id = randomUUID();
   const session: Session = {
     id,
     provider: req.provider ?? "claude",
-    status: "starting",
+    status: hasPrompt ? "starting" : "idle",
     createdAt: new Date(),
     permissionMode: req.permissionMode ?? "default",
     model: req.model,
@@ -110,7 +111,9 @@ export async function createSession(
   };
   sessions.set(id, session);
   // Fire and forget -- the async generator runs in the background
-  runSession(session, req.prompt, req.allowedTools);
+  if (hasPrompt) {
+    runSession(session, req.prompt!, req.allowedTools);
+  }
   return session;
 }
 
@@ -233,6 +236,12 @@ export async function sendFollowUp(
     return false;
   }
   session.abortController = new AbortController();
-  runSession(session, text, undefined, session.providerSessionId ?? session.id);
+  const isFirstMessage = session.status === "idle";
+  runSession(
+    session,
+    text,
+    undefined,
+    isFirstMessage ? undefined : (session.providerSessionId ?? session.id),
+  );
   return true;
 }
