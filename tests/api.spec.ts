@@ -91,8 +91,9 @@ test('rejects request with missing prompt', async ({ request }) => {
 });
 
 test('rejects request with invalid JSON body', async ({ request }) => {
+  // Use a Buffer so Playwright sends the raw bytes without JSON-encoding the string
   const res = await request.post('/api/sessions', {
-    data: 'not json{{{',
+    data: Buffer.from('not json{{{'),
     headers: { 'Content-Type': 'application/json' },
   });
   expect(res.status()).toBe(400);

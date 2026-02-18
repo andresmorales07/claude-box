@@ -72,7 +72,12 @@ export async function handleRequest(
     let parsed: CreateSessionRequest;
     try {
       const body = await readBody(req);
-      parsed = JSON.parse(body) as CreateSessionRequest;
+      const raw = JSON.parse(body);
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+        json(res, 400, { error: "invalid request body" });
+        return;
+      }
+      parsed = raw as CreateSessionRequest;
     } catch (err) {
       const msg = err instanceof Error && err.message === "request body too large"
         ? "request body too large"
