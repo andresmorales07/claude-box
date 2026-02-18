@@ -27,6 +27,20 @@ export default defineConfig({
       },
     },
     {
+      name: 'ttyd-firefox',
+      testMatch: 'ttyd.spec.ts',
+      use: {
+        baseURL: 'http://localhost:7681',
+        browserName: 'firefox',
+        trace: 'on-first-retry',
+        httpCredentials: {
+          username,
+          password,
+          send: 'always',
+        },
+      },
+    },
+    {
       name: 'api',
       testMatch: 'api.spec.ts',
       use: {
@@ -44,6 +58,15 @@ export default defineConfig({
       use: {
         baseURL: 'http://localhost:8080',
         browserName: 'chromium',
+        trace: 'on-first-retry',
+      },
+    },
+    {
+      name: 'web-ui-firefox',
+      testMatch: 'web-ui.spec.ts',
+      use: {
+        baseURL: 'http://localhost:8080',
+        browserName: 'firefox',
         trace: 'on-first-retry',
       },
     },
