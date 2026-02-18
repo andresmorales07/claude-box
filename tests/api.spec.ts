@@ -81,13 +81,14 @@ test('returns 404 for unknown session', async ({ request }) => {
   expect(body.error).toBe('session not found');
 });
 
-test('rejects request with missing prompt', async ({ request }) => {
+test('creates an idle session without prompt', async ({ request }) => {
   const res = await request.post('/api/sessions', {
     data: {},
   });
-  expect(res.status()).toBe(400);
+  expect(res.status()).toBe(201);
   const body = await res.json();
-  expect(body.error).toBe('prompt is required');
+  expect(body).toHaveProperty('id');
+  expect(body.status).toBe('idle');
 });
 
 test('rejects request with invalid JSON body', async ({ request }) => {
@@ -101,13 +102,14 @@ test('rejects request with invalid JSON body', async ({ request }) => {
   expect(body.error).toBe('invalid request body');
 });
 
-test('rejects request with empty prompt', async ({ request }) => {
+test('creates an idle session with empty prompt', async ({ request }) => {
   const res = await request.post('/api/sessions', {
     data: { prompt: '' },
   });
-  expect(res.status()).toBe(400);
+  expect(res.status()).toBe(201);
   const body = await res.json();
-  expect(body.error).toBe('prompt is required');
+  expect(body).toHaveProperty('id');
+  expect(body.status).toBe('idle');
 });
 
 test('rejects request with non-string prompt', async ({ request }) => {
@@ -116,7 +118,7 @@ test('rejects request with non-string prompt', async ({ request }) => {
   });
   expect(res.status()).toBe(400);
   const body = await res.json();
-  expect(body.error).toBe('prompt is required');
+  expect(body.error).toBe('prompt must be a string');
 });
 
 test('returns 404 for non-UUID session path', async ({ request }) => {
@@ -164,5 +166,19 @@ test('session respects cwd from request', async ({ request }) => {
   const { id } = await res.json();
   const detail = await request.get(`/api/sessions/${id}`);
   const session = await detail.json();
+  expect(session.cwd).toBe('/home/claude/workspace');
+});
+
+test('idle session has correct status and empty messages', async ({ request }) => {
+  const createRes = await request.post('/api/sessions', {
+    data: { cwd: '/home/claude/workspace' },
+  });
+  const { id } = await createRes.json();
+
+  const res = await request.get(`/api/sessions/${id}`);
+  expect(res.status()).toBe(200);
+  const session = await res.json();
+  expect(session.status).toBe('idle');
+  expect(session.messages).toEqual([]);
   expect(session.cwd).toBe('/home/claude/workspace');
 });
