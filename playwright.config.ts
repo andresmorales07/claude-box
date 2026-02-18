@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 const username = process.env.TTYD_USERNAME || 'claude';
 const password = process.env.TTYD_PASSWORD || 'changeme';
+const apiPassword = process.env.API_PASSWORD || 'changeme';
 
 export default defineConfig({
   testDir: './tests',
@@ -10,23 +11,55 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
-  use: {
-    baseURL: 'http://localhost:7681',
-    trace: 'on-first-retry',
-    httpCredentials: {
-      username,
-      password,
-      send: 'always',
-    },
-  },
   projects: [
     {
-      name: 'chromium',
-      use: { browserName: 'chromium' },
+      name: 'ttyd-chromium',
+      testMatch: 'ttyd.spec.ts',
+      use: {
+        baseURL: 'http://localhost:7681',
+        browserName: 'chromium',
+        trace: 'on-first-retry',
+        httpCredentials: {
+          username,
+          password,
+          send: 'always',
+        },
+      },
     },
     {
-      name: 'webkit',
-      use: { browserName: 'webkit' },
+      name: 'ttyd-webkit',
+      testMatch: 'ttyd.spec.ts',
+      use: {
+        baseURL: 'http://localhost:7681',
+        browserName: 'webkit',
+        trace: 'on-first-retry',
+        httpCredentials: {
+          username,
+          password,
+          send: 'always',
+        },
+      },
+    },
+    {
+      name: 'api',
+      testMatch: 'api.spec.ts',
+      use: {
+        baseURL: 'http://localhost:8080',
+        browserName: 'chromium',
+        trace: 'on-first-retry',
+        extraHTTPHeaders: {
+          Authorization: `Bearer ${apiPassword}`,
+        },
+      },
+    },
+    {
+      name: 'web-ui',
+      testMatch: 'web-ui.spec.ts',
+      use: {
+        baseURL: 'http://localhost:8080',
+        browserName: 'chromium',
+        trace: 'on-first-retry',
+      },
     },
   ],
 });
