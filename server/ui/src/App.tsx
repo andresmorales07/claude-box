@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SessionList } from "./components/SessionList";
 import { ChatView } from "./components/ChatView";
+import { FolderPicker } from "./components/FolderPicker";
 import "./styles.css";
 
 export function App() {
@@ -8,6 +9,7 @@ export function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [cwd, setCwd] = useState("/home/claude/workspace");
 
   if (!authenticated) {
     return <LoginPage token={token} setToken={setToken} onLogin={() => setAuthenticated(true)} />;
@@ -23,7 +25,8 @@ export function App() {
       </header>
       <div className="app-layout">
         <aside className={`sidebar ${showSidebar ? "open" : ""}`}>
-          <SessionList token={token} activeSessionId={activeSessionId} onSelectSession={(id) => { setActiveSessionId(id); setShowSidebar(false); }} />
+          <FolderPicker token={token} cwd={cwd} onCwdChange={setCwd} />
+          <SessionList token={token} cwd={cwd} activeSessionId={activeSessionId} onSelectSession={(id) => { setActiveSessionId(id); setShowSidebar(false); }} />
         </aside>
         <main className="main-panel">
           {activeSessionId ? (

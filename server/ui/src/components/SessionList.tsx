@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 
 interface SessionSummary { id: string; status: string; createdAt: string; numTurns: number; totalCostUsd: number; hasPendingApproval: boolean; }
-interface Props { token: string; activeSessionId: string | null; onSelectSession: (id: string) => void; }
+interface Props { token: string; cwd: string; activeSessionId: string | null; onSelectSession: (id: string) => void; }
 
-export function SessionList({ token, activeSessionId, onSelectSession }: Props) {
+export function SessionList({ token, cwd, activeSessionId, onSelectSession }: Props) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [prompt, setPrompt] = useState("");
   const [creating, setCreating] = useState(false);
@@ -24,7 +24,7 @@ export function SessionList({ token, activeSessionId, onSelectSession }: Props) 
     if (!prompt.trim() || creating) return;
     setCreating(true);
     try {
-      const res = await fetch("/api/sessions", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ prompt: prompt.trim() }) });
+      const res = await fetch("/api/sessions", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ prompt: prompt.trim(), cwd }) });
       if (res.ok) { const session = await res.json(); setPrompt(""); onSelectSession(session.id); fetchSessions(); }
     } catch (err) {
       console.error("Failed to create session:", err);
