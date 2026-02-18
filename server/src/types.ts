@@ -3,6 +3,7 @@ import type { WebSocket } from "ws";
 
 export interface Session {
   id: string;
+  sdkSessionId?: string;
   status: "starting" | "running" | "waiting_for_approval"
         | "completed" | "interrupted" | "error";
   createdAt: Date;

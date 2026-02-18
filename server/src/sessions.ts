@@ -59,7 +59,7 @@ export async function createSession(
     id,
     status: "starting",
     createdAt: new Date(),
-    permissionMode: req.permissionMode ?? "bypassPermissions",
+    permissionMode: req.permissionMode ?? "default",
     model: req.model,
     cwd: req.cwd ?? "/home/claude/workspace",
     abortController: new AbortController(),
@@ -140,9 +140,10 @@ async function runSession(
       if (isResultMessage(message)) {
         session.totalCostUsd = message.total_cost_usd;
         session.numTurns = message.num_turns;
-        // Capture the SDK session ID for resume support
+        // Capture the SDK session ID for resume support (stored separately
+        // so the Map key — session.id — remains the original UUID)
         if (message.session_id) {
-          session.id = message.session_id;
+          session.sdkSessionId = message.session_id;
         }
       }
     }
@@ -209,5 +210,5 @@ export async function sendFollowUp(
   text: string,
 ): Promise<void> {
   session.abortController = new AbortController();
-  runSession(session, text, undefined, session.id);
+  runSession(session, text, undefined, session.sdkSessionId ?? session.id);
 }

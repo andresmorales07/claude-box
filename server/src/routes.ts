@@ -14,11 +14,10 @@ const startTime = Date.now();
 const SESSION_ID_RE = /^\/api\/sessions\/([0-9a-f-]{36})$/;
 
 function corsHeaders(): Record<string, string> {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  };
+  // No CORS headers — the web UI is served from the same origin.
+  // Omitting Access-Control-Allow-Origin blocks cross-origin requests,
+  // preventing malicious websites from probing LAN instances.
+  return {};
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -30,10 +29,21 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
+const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    let totalBytes = 0;
+    req.on("data", (chunk: Buffer) => {
+      totalBytes += chunk.length;
+      if (totalBytes > MAX_BODY_BYTES) {
+        req.destroy();
+        reject(new Error("request body too large"));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks).toString()));
     req.on("error", reject);
   });
@@ -46,13 +56,6 @@ export async function handleRequest(
   const method = req.method ?? "GET";
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   const pathname = url.pathname;
-
-  // CORS preflight
-  if (method === "OPTIONS") {
-    res.writeHead(204, corsHeaders());
-    res.end();
-    return;
-  }
 
   // Health check — no auth required
   if (pathname === "/healthz" && method === "GET") {
