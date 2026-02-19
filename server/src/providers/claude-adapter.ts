@@ -6,6 +6,7 @@ import type {
   SDKUserMessage,
   SDKUserMessageReplay,
   SDKResultMessage,
+  SlashCommand as SDKSlashCommand,
   PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
 import type {
@@ -14,6 +15,7 @@ import type {
   ProviderSessionResult,
   NormalizedMessage,
   MessagePart,
+  SlashCommand,
 } from "./types.js";
 
 interface ContentBlock {
@@ -118,6 +120,7 @@ function normalizeMessage(msg: SDKMessage, index: number): NormalizedMessage | n
     case "result":
       return normalizeResult(msg as SDKResultMessage, index);
     default:
+      // system/init messages are handled via supportedCommands() after the stream
       return null;
   }
 }
@@ -185,6 +188,20 @@ export class ClaudeAdapter implements ProviderAdapter {
         },
       });
 
+      // Eagerly fetch enriched slash commands (with descriptions)
+      const enrichedCommandsPromise = queryHandle.supportedCommands().then(
+        (sdkCommands: SDKSlashCommand[]) =>
+          sdkCommands.map((cmd): SlashCommand => ({
+            name: cmd.name,
+            description: cmd.description,
+            argumentHint: cmd.argumentHint || undefined,
+          })),
+        (err) => {
+          console.warn("Failed to fetch enriched slash commands (non-critical):", err);
+          return null;
+        },
+      );
+
       for await (const sdkMessage of queryHandle) {
         // Capture result data before normalizing
         if (sdkMessage.type === "result") {
@@ -201,6 +218,16 @@ export class ClaudeAdapter implements ProviderAdapter {
           messageIndex++;
           yield normalized;
         }
+      }
+
+      // Yield enriched slash commands if available
+      const enrichedCommands = await enrichedCommandsPromise;
+      if (enrichedCommands && enrichedCommands.length > 0) {
+        yield {
+          role: "system",
+          event: { type: "system_init", slashCommands: enrichedCommands },
+          index: messageIndex++,
+        };
       }
     } finally {
       options.abortSignal.removeEventListener("abort", onAbort);

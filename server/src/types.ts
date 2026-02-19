@@ -1,4 +1,4 @@
-import type { NormalizedMessage, PermissionModeCommon, ApprovalDecision } from "./providers/types.js";
+import type { NormalizedMessage, PermissionModeCommon, ApprovalDecision, SlashCommand } from "./providers/types.js";
 import type { WebSocket } from "ws";
 
 export type SessionStatus =
@@ -16,6 +16,7 @@ export interface Session {
   cwd: string;
   abortController: AbortController;
   messages: NormalizedMessage[];
+  slashCommands: SlashCommand[];
   totalCostUsd: number;
   numTurns: number;
   lastError: string | null;
@@ -35,6 +36,7 @@ export interface SessionDTO {
   totalCostUsd: number;
   lastError: string | null;
   messages: NormalizedMessage[];
+  slashCommands: SlashCommand[];
   pendingApproval: { toolName: string; toolUseId: string; input: unknown } | null;
 }
 
@@ -65,6 +67,7 @@ export type ServerMessage =
   | { type: "message"; message: NormalizedMessage }
   | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown }
   | { type: "status"; status: SessionStatus; error?: string }
+  | { type: "slash_commands"; commands: SlashCommand[] }
   | { type: "replay_complete" }
   | { type: "ping" }
   | { type: "error"; message: string };

@@ -88,6 +88,7 @@ function normalizeMessage(msg, index) {
         case "result":
             return normalizeResult(msg, index);
         default:
+            // system/init messages are handled via supportedCommands() after the stream
             return null;
     }
 }
@@ -142,6 +143,15 @@ export class ClaudeAdapter {
                         },
                 },
             });
+            // Eagerly fetch enriched slash commands (with descriptions)
+            const enrichedCommandsPromise = queryHandle.supportedCommands().then((sdkCommands) => sdkCommands.map((cmd) => ({
+                name: cmd.name,
+                description: cmd.description,
+                argumentHint: cmd.argumentHint || undefined,
+            })), (err) => {
+                console.warn("Failed to fetch enriched slash commands (non-critical):", err);
+                return null;
+            });
             for await (const sdkMessage of queryHandle) {
                 // Capture result data before normalizing
                 if (sdkMessage.type === "result") {
@@ -157,6 +167,15 @@ export class ClaudeAdapter {
                     messageIndex++;
                     yield normalized;
                 }
+            }
+            // Yield enriched slash commands if available
+            const enrichedCommands = await enrichedCommandsPromise;
+            if (enrichedCommands && enrichedCommands.length > 0) {
+                yield {
+                    role: "system",
+                    event: { type: "system_init", slashCommands: enrichedCommands },
+                    index: messageIndex++,
+                };
             }
         }
         finally {

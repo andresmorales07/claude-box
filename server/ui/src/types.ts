@@ -13,7 +13,15 @@ export interface SystemEvent {
   role: "system";
   event:
     | { type: "session_result"; totalCostUsd: number; numTurns: number }
-    | { type: "status"; status: string };
+    | { type: "status"; status: string }
+    | { type: "system_init"; slashCommands: SlashCommand[] };
   index: number;
 }
 export type NormalizedMessage = UserMessage | AssistantMessage | SystemEvent;
+
+// Slash commands
+export interface SlashCommand {
+  name: string;
+  description: string;
+  argumentHint?: string;
+}
