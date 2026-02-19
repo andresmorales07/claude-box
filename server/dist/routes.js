@@ -4,7 +4,7 @@ import { authenticateRequest, sendUnauthorized } from "./auth.js";
 import { listSessions, getSession, sessionToDTO, getSessionCount, createSession, interruptSession, } from "./sessions.js";
 const startTime = Date.now();
 const SESSION_ID_RE = /^\/api\/sessions\/([0-9a-f-]{36})$/;
-const BROWSE_ROOT = "/home/claude/workspace";
+const BROWSE_ROOT = process.env.BROWSE_ROOT ?? process.cwd();
 function json(res, status, body) {
     const payload = JSON.stringify(body);
     res.writeHead(status, { "Content-Type": "application/json" });
