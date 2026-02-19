@@ -6,6 +6,8 @@ import type {
   SDKUserMessage,
   SDKUserMessageReplay,
   SDKResultMessage,
+  SDKSystemMessage,
+  SlashCommand as SDKSlashCommand,
   PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
 import type {
@@ -14,6 +16,7 @@ import type {
   ProviderSessionResult,
   NormalizedMessage,
   MessagePart,
+  SlashCommand,
 } from "./types.js";
 
 interface ContentBlock {
@@ -109,6 +112,19 @@ function normalizeResult(msg: SDKResultMessage, index: number): NormalizedMessag
   };
 }
 
+function normalizeSystem(msg: SDKSystemMessage, index: number): NormalizedMessage | null {
+  if (msg.subtype !== "init") return null;
+  const slashCommands: SlashCommand[] = (msg.slash_commands ?? []).map((name) => ({
+    name,
+    description: "",
+  }));
+  return {
+    role: "system",
+    event: { type: "system_init", slashCommands },
+    index,
+  };
+}
+
 function normalizeMessage(msg: SDKMessage, index: number): NormalizedMessage | null {
   switch (msg.type) {
     case "assistant":
@@ -117,6 +133,8 @@ function normalizeMessage(msg: SDKMessage, index: number): NormalizedMessage | n
       return normalizeUser(msg as SDKUserMessage | SDKUserMessageReplay, index);
     case "result":
       return normalizeResult(msg as SDKResultMessage, index);
+    case "system":
+      return normalizeSystem(msg as SDKSystemMessage, index);
     default:
       return null;
   }
@@ -185,6 +203,17 @@ export class ClaudeAdapter implements ProviderAdapter {
         },
       });
 
+      // Eagerly fetch enriched slash commands (with descriptions)
+      const enrichedCommandsPromise = queryHandle.supportedCommands().then(
+        (sdkCommands: SDKSlashCommand[]) =>
+          sdkCommands.map((cmd): SlashCommand => ({
+            name: cmd.name,
+            description: cmd.description,
+            argumentHint: cmd.argumentHint || undefined,
+          })),
+        () => null, // Swallow errors — slash commands are non-critical
+      );
+
       for await (const sdkMessage of queryHandle) {
         // Capture result data before normalizing
         if (sdkMessage.type === "result") {
@@ -201,6 +230,16 @@ export class ClaudeAdapter implements ProviderAdapter {
           messageIndex++;
           yield normalized;
         }
+      }
+
+      // Yield enriched slash commands if available
+      const enrichedCommands = await enrichedCommandsPromise;
+      if (enrichedCommands && enrichedCommands.length > 0) {
+        yield {
+          role: "system",
+          event: { type: "system_init", slashCommands: enrichedCommands },
+          index: messageIndex++,
+        };
       }
     } finally {
       options.abortSignal.removeEventListener("abort", onAbort);
