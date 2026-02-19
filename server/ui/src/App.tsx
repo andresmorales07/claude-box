@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { SessionList } from "./components/SessionList";
 import { ChatView } from "./components/ChatView";
 import { FolderPicker } from "./components/FolderPicker";
@@ -9,7 +9,22 @@ export function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [cwd, setCwd] = useState("/home/hatchpod/workspace");
+  const [cwd, setCwd] = useState("");
+  const [browseRoot, setBrowseRoot] = useState("");
+
+  // Fetch server config after authentication to get the actual browse root
+  useEffect(() => {
+    if (!authenticated) return;
+    fetch("/api/config", { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => res.ok ? res.json() : null)
+      .then((config) => {
+        if (config?.browseRoot) {
+          setBrowseRoot(config.browseRoot);
+          if (!cwd) setCwd(config.defaultCwd ?? config.browseRoot);
+        }
+      })
+      .catch(() => {});
+  }, [authenticated, token]);
 
   const startSession = useCallback(async (sessionCwd: string) => {
     try {
@@ -42,7 +57,7 @@ export function App() {
       </header>
       <div className="app-layout">
         <aside className={`sidebar ${showSidebar ? "open" : ""}`}>
-          <FolderPicker token={token} cwd={cwd} onCwdChange={setCwd} onStartSession={startSession} />
+          <FolderPicker token={token} cwd={cwd} browseRoot={browseRoot} onCwdChange={setCwd} onStartSession={startSession} />
           <SessionList token={token} cwd={cwd} activeSessionId={activeSessionId} onSelectSession={(id) => { setActiveSessionId(id); setShowSidebar(false); }} />
         </aside>
         <main className="main-panel">

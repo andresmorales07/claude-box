@@ -17,7 +17,7 @@ services:
       - home:/home/hatchpod
       - docker-data:/var/lib/docker
     environment:
-      - SSH_PASSWORD=${SSH_PASSWORD:-changeme}
+      - SSH_PASSWORD=${SSH_PASSWORD:-${CLAUDE_USER_PASSWORD:-changeme}}
       - TTYD_USERNAME=${TTYD_USERNAME:-hatchpod}
       - TTYD_PASSWORD=${TTYD_PASSWORD:-changeme}
       - TS_AUTHKEY=${TS_AUTHKEY:-}

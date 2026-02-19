@@ -106,7 +106,7 @@ RUN useradd -m -s /bin/bash -u 1000 hatchpod \
 RUN npm config -g set prefix /home/hatchpod/.npm-global
 ENV PATH="/home/hatchpod/.npm-global/bin:${PATH}"
 
-# Install Claude Code via native installer as claude user
+# Install Claude Code via native installer as hatchpod user
 USER hatchpod
 RUN curl -fsSL https://claude.ai/install.sh | bash
 USER root

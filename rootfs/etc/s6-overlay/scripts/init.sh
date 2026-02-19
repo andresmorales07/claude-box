@@ -6,6 +6,12 @@ if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then
     ssh-keygen -A
 fi
 
+# Backward compat: honor old env var name with deprecation warning
+if [ -z "$SSH_PASSWORD" ] && [ -n "$CLAUDE_USER_PASSWORD" ]; then
+    echo "init: WARNING: CLAUDE_USER_PASSWORD is deprecated, use SSH_PASSWORD instead" >&2
+    SSH_PASSWORD="$CLAUDE_USER_PASSWORD"
+fi
+
 # Set hatchpod user password from env
 if [ -n "$SSH_PASSWORD" ]; then
     echo "hatchpod:${SSH_PASSWORD}" | chpasswd

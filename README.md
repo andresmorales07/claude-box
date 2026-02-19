@@ -245,6 +245,28 @@ Process supervision by [s6-overlay](https://github.com/just-containers/s6-overla
 | `make clean` | Stop container, remove volumes and image |
 | `make docker-test` | Run hello-world inside the container (DinD smoke test) |
 
+## Upgrading from claude-box
+
+If you're upgrading from an earlier version named "claude-box", there are three breaking changes:
+
+**1. Volume name changed** (`claude-home` → `home`). Migrate your data before starting:
+
+```bash
+# Stop the old container
+docker compose down
+
+# Create the new volume and copy data
+docker volume create hatchpod_home
+docker run --rm \
+  -v claude-box_claude-home:/from \
+  -v hatchpod_home:/to \
+  alpine sh -c "cp -a /from/. /to/"
+```
+
+**2. Linux user changed** (`claude` → `hatchpod`). The migration above copies the files, but internal paths shift from `/home/claude/` to `/home/hatchpod/`. The container's init script automatically fixes ownership on boot.
+
+**3. Env var renamed** (`CLAUDE_USER_PASSWORD` → `SSH_PASSWORD`). Update your `.env` file. The old name still works temporarily but prints a deprecation warning.
+
 ## Security Notes
 
 - Change all default passwords in `.env` before exposing to a network

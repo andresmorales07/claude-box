@@ -41,7 +41,10 @@ async function serveStatic(pathname: string): Promise<{ data: Buffer; contentTyp
     const ext = extname(filePath);
     const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
     return { data, contentType };
-  } catch {
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.error(`Static file error for ${filePath}:`, err);
+    }
     return null;
   }
 }
