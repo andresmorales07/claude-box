@@ -37,6 +37,14 @@ export type MessagePart =
   | ReasoningPart
   | ErrorPart;
 
+// ── Slash commands ──
+
+export interface SlashCommand {
+  name: string;
+  description: string;
+  argumentHint?: string;
+}
+
 // ── Normalized messages (what clients render) ──
 
 export interface UserMessage {
@@ -55,7 +63,8 @@ export interface SystemEvent {
   role: "system";
   event:
     | { type: "session_result"; totalCostUsd: number; numTurns: number }
-    | { type: "status"; status: string };
+    | { type: "status"; status: string }
+    | { type: "system_init"; slashCommands: SlashCommand[] };
   index: number;
 }
 
