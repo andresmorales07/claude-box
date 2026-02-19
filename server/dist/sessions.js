@@ -37,6 +37,7 @@ export function sessionToDTO(session) {
         totalCostUsd: session.totalCostUsd,
         lastError: session.lastError,
         messages: session.messages,
+        slashCommands: session.slashCommands,
         pendingApproval: session.pendingApproval
             ? {
                 toolName: session.pendingApproval.toolName,

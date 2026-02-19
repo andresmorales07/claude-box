@@ -3,17 +3,12 @@ import type { SlashCommand } from "../types";
 
 interface Props {
   commands: SlashCommand[];
-  filter: string;
   activeIndex: number;
   onSelect: (command: SlashCommand) => void;
 }
 
-export function SlashCommandDropdown({ commands, filter, activeIndex, onSelect }: Props) {
+export function SlashCommandDropdown({ commands, activeIndex, onSelect }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
-
-  const filtered = commands.filter((cmd) =>
-    cmd.name.toLowerCase().startsWith(filter.toLowerCase()),
-  );
 
   // Scroll active item into view
   useEffect(() => {
@@ -21,11 +16,11 @@ export function SlashCommandDropdown({ commands, filter, activeIndex, onSelect }
     active?.scrollIntoView({ block: "nearest" });
   }, [activeIndex]);
 
-  if (filtered.length === 0) return null;
+  if (commands.length === 0) return null;
 
   return (
     <div className="slash-dropdown" ref={listRef} onMouseDown={(e) => e.preventDefault()}>
-      {filtered.map((cmd, i) => (
+      {commands.map((cmd, i) => (
         <div
           key={cmd.name}
           className={`slash-dropdown-item${i === activeIndex ? " active" : ""}`}

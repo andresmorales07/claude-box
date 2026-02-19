@@ -72,8 +72,7 @@ export function ChatView({ sessionId, token }: Props) {
       <div className="prompt-input-wrapper">
         {dropdownVisible && (
           <SlashCommandDropdown
-            commands={slashCommands}
-            filter={input.slice(1)}
+            commands={filtered}
             activeIndex={dropdownIndex}
             onSelect={selectCommand}
           />

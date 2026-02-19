@@ -36,6 +36,7 @@ export interface SessionDTO {
   totalCostUsd: number;
   lastError: string | null;
   messages: NormalizedMessage[];
+  slashCommands: SlashCommand[];
   pendingApproval: { toolName: string; toolUseId: string; input: unknown } | null;
 }
 
