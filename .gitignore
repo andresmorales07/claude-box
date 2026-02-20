@@ -1,3 +1,6 @@
+# Core dumps
+core.*
+
 .env
 docker-compose.override.yml
 *.log

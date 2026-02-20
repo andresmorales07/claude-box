@@ -141,7 +141,8 @@ function setupSessionConnection(ws: WebSocket, sessionId: string): void {
             answers = undefined;
           }
         }
-        handleApproval(session, parsed.toolUseId, true, undefined, answers);
+        const alwaysAllow = parsed.alwaysAllow === true;
+        handleApproval(session, parsed.toolUseId, true, undefined, answers, alwaysAllow);
         break;
       }
 

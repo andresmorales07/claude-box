@@ -9,7 +9,7 @@ import type { SlashCommand } from "../types";
 interface Props { sessionId: string; token: string; }
 
 export function ChatView({ sessionId, token }: Props) {
-  const { messages, slashCommands, status, connected, pendingApproval, thinkingText, thinkingStartTime, thinkingDurations, sendPrompt, approve, deny, interrupt } = useSession(sessionId, token);
+  const { messages, slashCommands, status, connected, pendingApproval, thinkingText, thinkingStartTime, thinkingDurations, sendPrompt, approve, approveAlways, deny, interrupt } = useSession(sessionId, token);
   const [input, setInput] = useState("");
   const [dropdownIndex, setDropdownIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -74,7 +74,7 @@ export function ChatView({ sessionId, token }: Props) {
         {isThinkingActive && <ThinkingIndicator thinkingText={thinkingText} startTime={thinkingStartTime!} />}
         <div ref={messagesEndRef} />
       </div>
-      {pendingApproval && <ToolApproval toolName={pendingApproval.toolName} toolUseId={pendingApproval.toolUseId} input={pendingApproval.input} onApprove={approve} onDeny={deny} />}
+      {pendingApproval && <ToolApproval toolName={pendingApproval.toolName} toolUseId={pendingApproval.toolUseId} input={pendingApproval.input} onApprove={approve} onApproveAlways={approveAlways} onDeny={deny} />}
       <div className="prompt-input-wrapper">
         {dropdownVisible && (
           <SlashCommandDropdown
