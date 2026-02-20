@@ -28,7 +28,8 @@ export function handleWsConnection(ws: WebSocket, sessionId: string, ip: string)
     let parsed: { type: string; token?: string };
     try {
       parsed = JSON.parse(typeof data === "string" ? data : data.toString());
-    } catch {
+    } catch (err) {
+      console.error("WebSocket auth: failed to parse JSON:", err);
       const msg: ServerMessage = { type: "error", message: "invalid JSON" };
       ws.send(JSON.stringify(msg));
       ws.close(4002, "invalid JSON");
@@ -120,7 +121,8 @@ function setupSessionConnection(ws: WebSocket, sessionId: string): void {
     let parsed: ClientMessage;
     try {
       parsed = JSON.parse(typeof data === "string" ? data : data.toString()) as ClientMessage;
-    } catch {
+    } catch (err) {
+      console.error(`WebSocket session ${sessionId}: failed to parse JSON:`, err);
       const errMsg = { type: "error", message: "invalid JSON" } satisfies ServerMessage;
       ws.send(JSON.stringify(errMsg));
       return;
