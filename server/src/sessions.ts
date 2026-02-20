@@ -231,6 +231,7 @@ export function handleApproval(
   toolUseId: string,
   allow: boolean,
   message?: string,
+  answers?: Record<string, string>,
 ): boolean {
   if (
     !session.pendingApproval ||
@@ -244,7 +245,15 @@ export function handleApproval(
   broadcast(session, { type: "status", status: "running" });
 
   if (allow) {
-    approval.resolve({ allow: true });
+    let updatedInput: Record<string, unknown> | undefined;
+    if (answers) {
+      if (approval.input && typeof approval.input === "object" && !Array.isArray(approval.input)) {
+        updatedInput = { ...(approval.input as Record<string, unknown>), answers };
+      } else {
+        updatedInput = { answers };
+      }
+    }
+    approval.resolve({ allow: true, updatedInput });
   } else {
     approval.resolve({ allow: false, message: message ?? "Denied by user" });
   }

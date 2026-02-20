@@ -134,7 +134,10 @@ export class ClaudeAdapter {
                                 input,
                             });
                             if (decision.allow) {
-                                return { behavior: "allow" };
+                                return {
+                                    behavior: "allow",
+                                    ...(decision.updatedInput ? { updatedInput: decision.updatedInput } : {}),
+                                };
                             }
                             return {
                                 behavior: "deny",

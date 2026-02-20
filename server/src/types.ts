@@ -59,7 +59,7 @@ export interface PendingApproval {
 
 export type ClientMessage =
   | { type: "prompt"; text: string }
-  | { type: "approve"; toolUseId: string }
+  | { type: "approve"; toolUseId: string; answers?: Record<string, string> }
   | { type: "deny"; toolUseId: string; message?: string }
   | { type: "interrupt" };
 

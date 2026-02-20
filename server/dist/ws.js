@@ -20,7 +20,8 @@ export function handleWsConnection(ws, sessionId, ip) {
         try {
             parsed = JSON.parse(typeof data === "string" ? data : data.toString());
         }
-        catch {
+        catch (err) {
+            console.error("WebSocket auth: failed to parse JSON:", err);
             const msg = { type: "error", message: "invalid JSON" };
             ws.send(JSON.stringify(msg));
             ws.close(4002, "invalid JSON");
@@ -100,7 +101,8 @@ function setupSessionConnection(ws, sessionId) {
         try {
             parsed = JSON.parse(typeof data === "string" ? data : data.toString());
         }
-        catch {
+        catch (err) {
+            console.error(`WebSocket session ${sessionId}: failed to parse JSON:`, err);
             const errMsg = { type: "error", message: "invalid JSON" };
             ws.send(JSON.stringify(errMsg));
             return;
@@ -109,9 +111,17 @@ function setupSessionConnection(ws, sessionId) {
             case "prompt":
                 sendFollowUp(session, parsed.text);
                 break;
-            case "approve":
-                handleApproval(session, parsed.toolUseId, true);
+            case "approve": {
+                let answers = parsed.answers;
+                if (answers !== undefined) {
+                    if (typeof answers !== "object" || answers === null || Array.isArray(answers) ||
+                        !Object.values(answers).every((v) => typeof v === "string")) {
+                        answers = undefined;
+                    }
+                }
+                handleApproval(session, parsed.toolUseId, true, undefined, answers);
                 break;
+            }
             case "deny":
                 handleApproval(session, parsed.toolUseId, false, parsed.message);
                 break;

@@ -59,6 +59,7 @@ export type ClientMessage = {
 } | {
     type: "approve";
     toolUseId: string;
+    answers?: Record<string, string>;
 } | {
     type: "deny";
     toolUseId: string;
