@@ -210,9 +210,15 @@ export function handleApproval(session, toolUseId, allow, message, answers) {
     session.status = "running";
     broadcast(session, { type: "status", status: "running" });
     if (allow) {
-        const updatedInput = answers
-            ? { ...approval.input, answers }
-            : undefined;
+        let updatedInput;
+        if (answers) {
+            if (approval.input && typeof approval.input === "object" && !Array.isArray(approval.input)) {
+                updatedInput = { ...approval.input, answers };
+            }
+            else {
+                updatedInput = { answers };
+            }
+        }
         approval.resolve({ allow: true, updatedInput });
     }
     else {

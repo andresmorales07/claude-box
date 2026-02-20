@@ -131,9 +131,17 @@ function setupSessionConnection(ws: WebSocket, sessionId: string): void {
         sendFollowUp(session, parsed.text);
         break;
 
-      case "approve":
-        handleApproval(session, parsed.toolUseId, true, undefined, parsed.answers);
+      case "approve": {
+        let answers: Record<string, string> | undefined = parsed.answers;
+        if (answers !== undefined) {
+          if (typeof answers !== "object" || answers === null || Array.isArray(answers) ||
+              !Object.values(answers).every((v) => typeof v === "string")) {
+            answers = undefined;
+          }
+        }
+        handleApproval(session, parsed.toolUseId, true, undefined, answers);
         break;
+      }
 
       case "deny":
         handleApproval(session, parsed.toolUseId, false, parsed.message);

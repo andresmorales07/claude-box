@@ -78,11 +78,9 @@ export interface ToolApprovalRequest {
   input: unknown;
 }
 
-export interface ApprovalDecision {
-  allow: boolean;
-  message?: string;
-  updatedInput?: Record<string, unknown>;
-}
+export type ApprovalDecision =
+  | { allow: true; updatedInput?: Record<string, unknown> }
+  | { allow: false; message?: string };
 
 // ── Permission mode (provider-agnostic) ──
 

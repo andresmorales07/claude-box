@@ -128,8 +128,14 @@ export function useSession(sessionId: string | null, token: string): SessionHook
   return {
     messages, slashCommands, status, connected, pendingApproval, thinkingText, thinkingStartTime, thinkingDurations,
     sendPrompt: (text: string) => send({ type: "prompt", text }),
-    approve: (toolUseId: string, answers?: Record<string, string>) => { send({ type: "approve", toolUseId, ...(answers ? { answers } : {}) }); setPendingApproval(null); },
-    deny: (toolUseId: string, message?: string) => { send({ type: "deny", toolUseId, message }); setPendingApproval(null); },
+    approve: (toolUseId: string, answers?: Record<string, string>) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+      send({ type: "approve", toolUseId, ...(answers ? { answers } : {}) }); setPendingApproval(null);
+    },
+    deny: (toolUseId: string, message?: string) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+      send({ type: "deny", toolUseId, message }); setPendingApproval(null);
+    },
     interrupt: () => send({ type: "interrupt" }),
   };
 }

@@ -60,11 +60,13 @@ export interface ToolApprovalRequest {
     toolUseId: string;
     input: unknown;
 }
-export interface ApprovalDecision {
-    allow: boolean;
-    message?: string;
+export type ApprovalDecision = {
+    allow: true;
     updatedInput?: Record<string, unknown>;
-}
+} | {
+    allow: false;
+    message?: string;
+};
 export type PermissionModeCommon = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "delegate" | "dontAsk";
 export interface ProviderSessionOptions {
     prompt: string;
