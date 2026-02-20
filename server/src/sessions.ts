@@ -23,14 +23,77 @@ setInterval(() => {
 }, CLEANUP_INTERVAL_MS).unref();
 
 export function listSessions(): SessionSummaryDTO[] {
-  return Array.from(sessions.values()).map((s) => ({
-    id: s.id,
-    status: s.status,
-    createdAt: s.createdAt.toISOString(),
-    numTurns: s.numTurns,
-    totalCostUsd: s.totalCostUsd,
-    hasPendingApproval: s.pendingApproval !== null,
-  }));
+  return Array.from(sessions.values()).map((s) => {
+    const lastModified = s.messages.length > 0
+      ? new Date().toISOString()
+      : s.createdAt.toISOString();
+    return {
+      id: s.id,
+      status: s.status,
+      createdAt: s.createdAt.toISOString(),
+      lastModified,
+      numTurns: s.numTurns,
+      totalCostUsd: s.totalCostUsd,
+      hasPendingApproval: s.pendingApproval !== null,
+      provider: s.provider,
+      slug: null,
+      summary: null,
+    };
+  });
+}
+
+export async function listSessionsWithHistory(cwd?: string): Promise<SessionSummaryDTO[]> {
+  const liveSessions = listSessions();
+
+  if (!cwd) return liveSessions;
+
+  const { listSessionHistory } = await import("./session-history.js");
+  let history: Awaited<ReturnType<typeof listSessionHistory>>;
+  try {
+    history = await listSessionHistory(cwd);
+  } catch {
+    return liveSessions;
+  }
+
+  // Build set of provider session IDs that are already live
+  const liveProviderIds = new Set<string>();
+  for (const s of sessions.values()) {
+    if (s.providerSessionId) liveProviderIds.add(s.providerSessionId);
+  }
+
+  // Enrich live sessions with slug/summary from history
+  for (const live of liveSessions) {
+    const session = sessions.get(live.id);
+    if (!session?.providerSessionId) continue;
+    const histMatch = history.find((h) => h.id === session.providerSessionId);
+    if (histMatch) {
+      live.slug = histMatch.slug;
+      live.summary = histMatch.summary;
+      live.lastModified = histMatch.lastModified.toISOString();
+    }
+  }
+
+  // Add history-only sessions (not already live)
+  for (const h of history) {
+    if (liveProviderIds.has(h.id)) continue;
+    liveSessions.push({
+      id: h.id,
+      status: "history",
+      createdAt: h.createdAt.toISOString(),
+      lastModified: h.lastModified.toISOString(),
+      numTurns: 0,
+      totalCostUsd: 0,
+      hasPendingApproval: false,
+      provider: "claude",
+      slug: h.slug,
+      summary: h.summary,
+    });
+  }
+
+  // Sort by lastModified descending
+  liveSessions.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+
+  return liveSessions;
 }
 
 export function sessionToDTO(session: Session): SessionDTO {
@@ -99,6 +162,7 @@ export async function createSession(
   const session: Session = {
     id,
     provider: req.provider ?? "claude",
+    providerSessionId: req.resumeSessionId,
     status: hasPrompt ? "starting" : "idle",
     createdAt: new Date(),
     permissionMode: req.permissionMode ?? "default",
@@ -111,12 +175,12 @@ export async function createSession(
     numTurns: 0,
     lastError: null,
     pendingApproval: null,
+    alwaysAllowedTools: new Set<string>(),
     clients: new Set<WebSocket>(),
   };
   sessions.set(id, session);
-  // Fire and forget -- the async generator runs in the background
   if (hasPrompt) {
-    runSession(session, req.prompt!, req.allowedTools);
+    runSession(session, req.prompt!, req.allowedTools, req.resumeSessionId);
   }
   return session;
 }
@@ -141,8 +205,11 @@ async function runSession(
       maxTurns: 50,
       abortSignal: session.abortController.signal,
       resumeSessionId,
-      onToolApproval: (request) =>
-        new Promise((resolve) => {
+      onToolApproval: (request) => {
+        if (session.alwaysAllowedTools.has(request.toolName)) {
+          return Promise.resolve({ allow: true as const });
+        }
+        return new Promise((resolve) => {
           session.pendingApproval = {
             toolName: request.toolName,
             toolUseId: request.toolUseId,
@@ -160,7 +227,8 @@ async function runSession(
             toolUseId: request.toolUseId,
             input: request.input,
           });
-        }),
+        });
+      },
       onThinkingDelta: (text: string) => {
         if (session.status === "running") {
           broadcast(session, { type: "thinking_delta", text });
@@ -232,6 +300,7 @@ export function handleApproval(
   allow: boolean,
   message?: string,
   answers?: Record<string, string>,
+  alwaysAllow?: boolean,
 ): boolean {
   if (
     !session.pendingApproval ||
@@ -245,6 +314,9 @@ export function handleApproval(
   broadcast(session, { type: "status", status: "running" });
 
   if (allow) {
+    if (alwaysAllow) {
+      session.alwaysAllowedTools.add(approval.toolName);
+    }
     let updatedInput: Record<string, unknown> | undefined;
     if (answers) {
       if (approval.input && typeof approval.input === "object" && !Array.isArray(approval.input)) {
@@ -253,7 +325,7 @@ export function handleApproval(
         updatedInput = { answers };
       }
     }
-    approval.resolve({ allow: true, updatedInput });
+    approval.resolve({ allow: true, updatedInput, alwaysAllow });
   } else {
     approval.resolve({ allow: false, message: message ?? "Denied by user" });
   }
