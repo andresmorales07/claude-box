@@ -139,7 +139,9 @@ async function runSession(session, prompt, allowedTools, resumeSessionId) {
                 });
             }),
             onThinkingDelta: (text) => {
-                broadcast(session, { type: "thinking_delta", text });
+                if (session.status === "running") {
+                    broadcast(session, { type: "thinking_delta", text });
+                }
             },
         });
         // Manual iteration instead of for-await because we need the generator's

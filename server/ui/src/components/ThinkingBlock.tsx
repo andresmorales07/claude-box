@@ -32,7 +32,8 @@ export function ThinkingBlock({ text, durationMs }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [label] = useState(randomLabel);
 
-  const duration = durationMs != null ? formatDuration(durationMs) : "";
+  const duration = durationMs != null ? formatDuration(durationMs) : null;
+  const labelText = duration != null ? `${label} ${duration}` : label;
 
   return (
     <div className="thinking-block">
@@ -40,12 +41,11 @@ export function ThinkingBlock({ text, durationMs }: Props) {
         className="thinking-header"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
+        aria-label={`${labelText} - click to ${expanded ? "collapse" : "expand"} thinking details`}
       >
         <span className="thinking-dot done" />
-        <span className="thinking-label">
-          {label} {duration}
-        </span>
-        <span className={`thinking-chevron ${expanded ? "expanded" : ""}`}>
+        <span className="thinking-label">{labelText}</span>
+        <span className={`thinking-chevron ${expanded ? "expanded" : ""}`} aria-hidden="true">
           &#9656;
         </span>
       </button>

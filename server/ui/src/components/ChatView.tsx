@@ -9,22 +9,10 @@ import type { SlashCommand } from "../types";
 interface Props { sessionId: string; token: string; }
 
 export function ChatView({ sessionId, token }: Props) {
-  const { messages, slashCommands, status, connected, pendingApproval, thinkingText, thinkingStartTime, sendPrompt, approve, deny, interrupt } = useSession(sessionId, token);
+  const { messages, slashCommands, status, connected, pendingApproval, thinkingText, thinkingStartTime, thinkingDurations, sendPrompt, approve, deny, interrupt } = useSession(sessionId, token);
   const [input, setInput] = useState("");
   const [dropdownIndex, setDropdownIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Track the last thinking duration for completed thinking blocks
-  const thinkingDurationRef = useRef<number | null>(null);
-  const prevThinkingStartRef = useRef<number | null>(null);
-
-  // When thinkingStartTime clears (thinking complete), freeze the duration
-  useEffect(() => {
-    if (prevThinkingStartRef.current != null && thinkingStartTime == null) {
-      thinkingDurationRef.current = Date.now() - prevThinkingStartRef.current;
-    }
-    prevThinkingStartRef.current = thinkingStartTime;
-  }, [thinkingStartTime]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinkingText]);
 
@@ -82,7 +70,7 @@ export function ChatView({ sessionId, token }: Props) {
         {(status === "running" || status === "starting") && <button onClick={interrupt} className="interrupt-btn">Stop</button>}
       </div>
       <div className="messages">
-        {messages.map((msg, i) => <MessageBubble key={i} message={msg} thinkingDurationMs={thinkingDurationRef.current} />)}
+        {messages.map((msg, i) => <MessageBubble key={i} message={msg} thinkingDurationMs={thinkingDurations[i] ?? null} />)}
         {isThinkingActive && <ThinkingIndicator thinkingText={thinkingText} startTime={thinkingStartTime!} />}
         <div ref={messagesEndRef} />
       </div>

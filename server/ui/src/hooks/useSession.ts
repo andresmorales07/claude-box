@@ -19,6 +19,7 @@ interface SessionHook {
   pendingApproval: { toolName: string; toolUseId: string; input: unknown } | null;
   thinkingText: string;
   thinkingStartTime: number | null;
+  thinkingDurations: Record<number, number>;
   sendPrompt: (text: string) => void;
   approve: (toolUseId: string) => void;
   deny: (toolUseId: string, message?: string) => void;
@@ -36,6 +37,9 @@ export function useSession(sessionId: string | null, token: string): SessionHook
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
   const [thinkingText, setThinkingText] = useState("");
   const [thinkingStartTime, setThinkingStartTime] = useState<number | null>(null);
+  const [thinkingDurations, setThinkingDurations] = useState<Record<number, number>>({});
+  const thinkingStartRef = useRef<number | null>(null);
+  const messageCountRef = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const reconnectAttempts = useRef(0);
@@ -61,7 +65,14 @@ export function useSession(sessionId: string | null, token: string): SessionHook
       switch (msg.type) {
         case "message": {
           const m = msg.message;
+          const msgIdx = messageCountRef.current;
+          messageCountRef.current++;
           if (m.role === "assistant" && m.parts.some((p) => p.type === "reasoning")) {
+            if (thinkingStartRef.current != null) {
+              const duration = Date.now() - thinkingStartRef.current;
+              setThinkingDurations((prev) => ({ ...prev, [msgIdx]: duration }));
+            }
+            thinkingStartRef.current = null;
             setThinkingText("");
             setThinkingStartTime(null);
           }
@@ -71,13 +82,17 @@ export function useSession(sessionId: string | null, token: string): SessionHook
         case "status":
           setStatus(msg.status);
           if (msg.status !== "running") {
+            thinkingStartRef.current = null;
             setThinkingText("");
             setThinkingStartTime(null);
           }
           break;
         case "thinking_delta":
           setThinkingText((prev) => prev + msg.text);
-          setThinkingStartTime((prev) => prev ?? Date.now());
+          if (thinkingStartRef.current == null) {
+            thinkingStartRef.current = Date.now();
+          }
+          setThinkingStartTime(thinkingStartRef.current);
           break;
         case "tool_approval_request": setPendingApproval({ toolName: msg.toolName, toolUseId: msg.toolUseId, input: msg.input }); break;
         case "slash_commands": if (Array.isArray(msg.commands)) setSlashCommands(msg.commands); break;
@@ -99,7 +114,9 @@ export function useSession(sessionId: string | null, token: string): SessionHook
   }, [sessionId, token]);
 
   useEffect(() => {
-    setMessages([]); setStatus("starting"); setPendingApproval(null); setSlashCommands([]); setThinkingText(""); setThinkingStartTime(null);
+    setMessages([]); setStatus("starting"); setPendingApproval(null); setSlashCommands([]);
+    setThinkingText(""); setThinkingStartTime(null); setThinkingDurations({});
+    thinkingStartRef.current = null; messageCountRef.current = 0;
     connect();
     return () => { clearTimeout(reconnectTimer.current); wsRef.current?.close(); };
   }, [connect]);
@@ -109,7 +126,7 @@ export function useSession(sessionId: string | null, token: string): SessionHook
   }, []);
 
   return {
-    messages, slashCommands, status, connected, pendingApproval, thinkingText, thinkingStartTime,
+    messages, slashCommands, status, connected, pendingApproval, thinkingText, thinkingStartTime, thinkingDurations,
     sendPrompt: (text: string) => send({ type: "prompt", text }),
     approve: (toolUseId: string) => { send({ type: "approve", toolUseId }); setPendingApproval(null); },
     deny: (toolUseId: string, message?: string) => { send({ type: "deny", toolUseId, message }); setPendingApproval(null); },

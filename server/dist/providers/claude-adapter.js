@@ -153,12 +153,21 @@ export class ClaudeAdapter {
                 return null;
             });
             for await (const sdkMessage of queryHandle) {
-                // Handle streaming thinking deltas (raw API events)
+                // Handle streaming thinking deltas (raw API events).
+                // stream_events are raw API-level; only thinking_delta is forwarded.
                 if (sdkMessage.type === "stream_event") {
                     const event = sdkMessage.event;
                     if (event?.type === "content_block_delta" &&
                         event.delta?.type === "thinking_delta") {
-                        options.onThinkingDelta?.(event.delta.thinking);
+                        const thinking = event.delta?.thinking;
+                        if (typeof thinking === "string") {
+                            try {
+                                options.onThinkingDelta?.(thinking);
+                            }
+                            catch (err) {
+                                console.error("Failed to deliver thinking delta:", err);
+                            }
+                        }
                     }
                     continue;
                 }

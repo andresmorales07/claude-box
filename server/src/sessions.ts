@@ -162,7 +162,9 @@ async function runSession(
           });
         }),
       onThinkingDelta: (text: string) => {
-        broadcast(session, { type: "thinking_delta", text });
+        if (session.status === "running") {
+          broadcast(session, { type: "thinking_delta", text });
+        }
       },
     });
 
