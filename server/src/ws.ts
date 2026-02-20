@@ -13,7 +13,7 @@ export function extractSessionIdFromPath(pathname: string): string | null {
   return match ? match[1] : null;
 }
 
-export function handleWsConnection(ws: WebSocket, sessionId: string, ip?: string): void {
+export function handleWsConnection(ws: WebSocket, sessionId: string, ip: string): void {
   // First message must be { type: "auth", token: "..." }
   // This avoids leaking the token in the URL / query string.
   const authTimeout = setTimeout(() => {
@@ -35,8 +35,15 @@ export function handleWsConnection(ws: WebSocket, sessionId: string, ip?: string
       return;
     }
 
-    const authResult = authenticateToken(parsed.token ?? "", ip);
-    if (parsed.type !== "auth" || !parsed.token || authResult !== true) {
+    if (parsed.type !== "auth" || !parsed.token) {
+      const msg: ServerMessage = { type: "error", message: "unauthorized" };
+      ws.send(JSON.stringify(msg));
+      ws.close(4001, "unauthorized");
+      return;
+    }
+
+    const authResult = authenticateToken(parsed.token, ip);
+    if (authResult !== true) {
       const message = authResult === "rate_limited" ? "too many failed attempts" : "unauthorized";
       const msg: ServerMessage = { type: "error", message };
       ws.send(JSON.stringify(msg));

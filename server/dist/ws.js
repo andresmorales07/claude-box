@@ -26,8 +26,14 @@ export function handleWsConnection(ws, sessionId, ip) {
             ws.close(4002, "invalid JSON");
             return;
         }
-        const authResult = authenticateToken(parsed.token ?? "", ip);
-        if (parsed.type !== "auth" || !parsed.token || authResult !== true) {
+        if (parsed.type !== "auth" || !parsed.token) {
+            const msg = { type: "error", message: "unauthorized" };
+            ws.send(JSON.stringify(msg));
+            ws.close(4001, "unauthorized");
+            return;
+        }
+        const authResult = authenticateToken(parsed.token, ip);
+        if (authResult !== true) {
             const message = authResult === "rate_limited" ? "too many failed attempts" : "unauthorized";
             const msg = { type: "error", message };
             ws.send(JSON.stringify(msg));

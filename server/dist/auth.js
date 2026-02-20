@@ -40,10 +40,13 @@ function isRateLimited(ip) {
     failedAttempts.set(ip, recent);
     return recent.length >= MAX_FAILED_ATTEMPTS;
 }
+const TRUST_PROXY = process.env.TRUST_PROXY === "1";
 function getClientIp(req) {
-    const forwarded = req.headers["x-forwarded-for"];
-    if (typeof forwarded === "string")
-        return forwarded.split(",")[0].trim();
+    if (TRUST_PROXY) {
+        const forwarded = req.headers["x-forwarded-for"];
+        if (typeof forwarded === "string")
+            return forwarded.split(",")[0].trim();
+    }
     return req.socket.remoteAddress ?? "unknown";
 }
 export function authenticateRequest(req) {
@@ -61,10 +64,10 @@ export function authenticateRequest(req) {
     return valid;
 }
 export function authenticateToken(token, ip) {
-    if (ip && isRateLimited(ip))
+    if (isRateLimited(ip))
         return "rate_limited";
     const valid = safeCompare(token, API_PASSWORD);
-    if (!valid && ip)
+    if (!valid)
         recordFailedAttempt(ip);
     return valid;
 }

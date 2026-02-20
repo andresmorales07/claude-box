@@ -46,9 +46,13 @@ function isRateLimited(ip: string): boolean {
   return recent.length >= MAX_FAILED_ATTEMPTS;
 }
 
+const TRUST_PROXY = process.env.TRUST_PROXY === "1";
+
 function getClientIp(req: IncomingMessage): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") return forwarded.split(",")[0].trim();
+  if (TRUST_PROXY) {
+    const forwarded = req.headers["x-forwarded-for"];
+    if (typeof forwarded === "string") return forwarded.split(",")[0].trim();
+  }
   return req.socket.remoteAddress ?? "unknown";
 }
 
@@ -65,10 +69,10 @@ export function authenticateRequest(req: IncomingMessage): boolean | "rate_limit
   return valid;
 }
 
-export function authenticateToken(token: string, ip?: string): boolean | "rate_limited" {
-  if (ip && isRateLimited(ip)) return "rate_limited";
+export function authenticateToken(token: string, ip: string): boolean | "rate_limited" {
+  if (isRateLimited(ip)) return "rate_limited";
   const valid = safeCompare(token, API_PASSWORD!);
-  if (!valid && ip) recordFailedAttempt(ip);
+  if (!valid) recordFailedAttempt(ip);
   return valid;
 }
 
