@@ -8,6 +8,7 @@ import type {
   SDKResultMessage,
   SlashCommand as SDKSlashCommand,
   PermissionResult,
+  PermissionUpdate,
 } from "@anthropic-ai/claude-agent-sdk";
 import type {
   ProviderAdapter,
@@ -27,11 +28,12 @@ interface ContentBlock {
   thinking?: string;
 }
 
-function normalizeAssistant(msg: SDKAssistantMessage, index: number): NormalizedMessage | null {
+function normalizeAssistant(msg: SDKAssistantMessage, index: number, accumulatedThinking = ""): NormalizedMessage | null {
   const content = msg.message?.content;
   if (!Array.isArray(content)) return null;
 
   const parts: MessagePart[] = [];
+  let hasNativeThinking = false;
   for (const block of content as ContentBlock[]) {
     switch (block.type) {
       case "text":
@@ -49,10 +51,17 @@ function normalizeAssistant(msg: SDKAssistantMessage, index: number): Normalized
         break;
       case "thinking":
         if (block.thinking) {
+          hasNativeThinking = true;
           parts.push({ type: "reasoning", text: block.thinking });
         }
         break;
     }
+  }
+
+  // Inject accumulated thinking from stream deltas if the SDK didn't
+  // include a native thinking block in the finalized message content
+  if (!hasNativeThinking && accumulatedThinking) {
+    parts.unshift({ type: "reasoning", text: accumulatedThinking });
   }
 
   if (parts.length === 0) return null;
@@ -111,10 +120,10 @@ function normalizeResult(msg: SDKResultMessage, index: number): NormalizedMessag
   };
 }
 
-function normalizeMessage(msg: SDKMessage, index: number): NormalizedMessage | null {
+function normalizeMessage(msg: SDKMessage, index: number, accumulatedThinking = ""): NormalizedMessage | null {
   switch (msg.type) {
     case "assistant":
-      return normalizeAssistant(msg as SDKAssistantMessage, index);
+      return normalizeAssistant(msg as SDKAssistantMessage, index, accumulatedThinking);
     case "user":
       return normalizeUser(msg as SDKUserMessage | SDKUserMessageReplay, index);
     case "result":
@@ -143,6 +152,7 @@ export class ClaudeAdapter implements ProviderAdapter {
     let providerSessionId: string | undefined;
     let totalCostUsd = 0;
     let numTurns = 0;
+    let accumulatedThinking = "";
 
     try {
       const queryHandle: Query = sdkQuery({
@@ -170,7 +180,10 @@ export class ClaudeAdapter implements ProviderAdapter {
               : async (
                   toolName: string,
                   input: Record<string, unknown>,
-                  opts: { toolUseID: string },
+                  opts: {
+                    toolUseID: string;
+                    suggestions?: PermissionUpdate[];
+                  },
                 ): Promise<PermissionResult> => {
                   const decision = await options.onToolApproval({
                     toolName,
@@ -181,6 +194,9 @@ export class ClaudeAdapter implements ProviderAdapter {
                     return {
                       behavior: "allow" as const,
                       ...(decision.updatedInput ? { updatedInput: decision.updatedInput } : {}),
+                      ...(decision.alwaysAllow && opts.suggestions
+                        ? { updatedPermissions: opts.suggestions }
+                        : {}),
                     };
                   }
                   return {
@@ -216,6 +232,7 @@ export class ClaudeAdapter implements ProviderAdapter {
           ) {
             const thinking = (event.delta as Record<string, unknown>)?.thinking;
             if (typeof thinking === "string") {
+              accumulatedThinking += thinking;
               try {
                 options.onThinkingDelta?.(thinking);
               } catch (err) {
@@ -236,7 +253,14 @@ export class ClaudeAdapter implements ProviderAdapter {
           }
         }
 
-        const normalized = normalizeMessage(sdkMessage, messageIndex);
+        // Only pass accumulated thinking to assistant messages; reset after use
+        let thinkingForMsg = "";
+        if (sdkMessage.type === "assistant") {
+          thinkingForMsg = accumulatedThinking;
+          accumulatedThinking = "";
+        }
+
+        const normalized = normalizeMessage(sdkMessage, messageIndex, thinkingForMsg);
         if (normalized) {
           messageIndex++;
           yield normalized;

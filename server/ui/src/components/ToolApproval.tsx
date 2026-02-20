@@ -3,6 +3,7 @@ import { useState, useCallback } from "react";
 interface Props {
   toolName: string; toolUseId: string; input: unknown;
   onApprove: (toolUseId: string, answers?: Record<string, string>) => void;
+  onApproveAlways: (toolUseId: string) => void;
   onDeny: (toolUseId: string) => void;
 }
 
@@ -135,7 +136,7 @@ function AskUserQuestionUI({ questions, toolUseId, onApprove, onDeny }: {
   );
 }
 
-export function ToolApproval({ toolName, toolUseId, input, onApprove, onDeny }: Props) {
+export function ToolApproval({ toolName, toolUseId, input, onApprove, onApproveAlways, onDeny }: Props) {
   if (toolName === "AskUserQuestion" && isAskUserQuestion(input)) {
     return <AskUserQuestionUI questions={input.questions} toolUseId={toolUseId} onApprove={onApprove} onDeny={onDeny} />;
   }
@@ -146,6 +147,7 @@ export function ToolApproval({ toolName, toolUseId, input, onApprove, onDeny }: 
       <div className="tool-input">{JSON.stringify(input, null, 2)}</div>
       <div className="actions">
         <button className="approve" onClick={() => onApprove(toolUseId)}>Approve</button>
+        <button className="approve-always" onClick={() => onApproveAlways(toolUseId)}>Always Allow</button>
         <button className="deny" onClick={() => onDeny(toolUseId)}>Deny</button>
       </div>
     </div>

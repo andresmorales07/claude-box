@@ -108,6 +108,44 @@ describe("Tool Approval", () => {
     ws.close();
   });
 
+  it("always-allow auto-approves subsequent calls for the same tool", async () => {
+    const createRes = await api("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ prompt: "[tool-approval-multi] go", provider: "test" }),
+    });
+    const { id } = await createRes.json();
+    const ws = await connectWs(id);
+
+    // First tool call prompts for approval
+    const msgs1 = await collectMessages(ws, (msg) => msg.type === "tool_approval_request");
+    const req1 = msgs1.find((m) => m.type === "tool_approval_request") as ServerMessage & {
+      toolUseId: string;
+    };
+    expect(req1).toBeDefined();
+
+    // Approve with alwaysAllow
+    ws.send(JSON.stringify({ type: "approve", toolUseId: req1.toolUseId, alwaysAllow: true }));
+
+    // Second tool call should NOT prompt — session completes without another approval request
+    const remaining = await collectMessages(ws, (msg) =>
+      msg.type === "status" && (msg as ServerMessage & { status: string }).status === "completed",
+    );
+
+    // Verify no second approval request was sent
+    const approvalRequests = remaining.filter((m) => m.type === "tool_approval_request");
+    expect(approvalRequests).toHaveLength(0);
+
+    // Verify final message shows both tools were approved
+    const textMsgs = remaining.filter((m) => m.type === "message");
+    const lastMsg = textMsgs[textMsgs.length - 1] as ServerMessage & {
+      message: { parts: Array<{ type: string; text?: string }> };
+    };
+    const textPart = lastMsg.message.parts.find((p) => p.type === "text");
+    expect(textPart?.text).toBe("first:true second:true");
+
+    ws.close();
+  });
+
   it("transitions status correctly during approval flow", async () => {
     const createRes = await api("/api/sessions", {
       method: "POST",

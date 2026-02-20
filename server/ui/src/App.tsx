@@ -43,6 +43,23 @@ export function App() {
     }
   }, [token]);
 
+  const resumeSession = useCallback(async (historySessionId: string) => {
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeSessionId: historySessionId, cwd, provider: "claude" }),
+      });
+      if (res.ok) {
+        const session = await res.json();
+        setActiveSessionId(session.id);
+        setShowSidebar(false);
+      }
+    } catch (err) {
+      console.error("Failed to resume session:", err);
+    }
+  }, [token, cwd]);
+
   if (!authenticated) {
     return <LoginPage token={token} setToken={setToken} onLogin={() => setAuthenticated(true)} />;
   }
@@ -58,7 +75,7 @@ export function App() {
       <div className="app-layout">
         <aside className={`sidebar ${showSidebar ? "open" : ""}`}>
           <FolderPicker token={token} cwd={cwd} browseRoot={browseRoot} onCwdChange={setCwd} onStartSession={startSession} />
-          <SessionList token={token} cwd={cwd} activeSessionId={activeSessionId} onSelectSession={(id) => { setActiveSessionId(id); setShowSidebar(false); }} />
+          <SessionList token={token} cwd={cwd} activeSessionId={activeSessionId} onSelectSession={(id) => { setActiveSessionId(id); setShowSidebar(false); }} onResumeSession={resumeSession} />
         </aside>
         <main className="main-panel">
           {activeSessionId ? (

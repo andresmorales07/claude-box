@@ -22,6 +22,7 @@ interface SessionHook {
   thinkingDurations: Record<number, number>;
   sendPrompt: (text: string) => void;
   approve: (toolUseId: string, answers?: Record<string, string>) => void;
+  approveAlways: (toolUseId: string) => void;
   deny: (toolUseId: string, message?: string) => void;
   interrupt: () => void;
 }
@@ -131,6 +132,10 @@ export function useSession(sessionId: string | null, token: string): SessionHook
     approve: (toolUseId: string, answers?: Record<string, string>) => {
       if (wsRef.current?.readyState !== WebSocket.OPEN) return;
       send({ type: "approve", toolUseId, ...(answers ? { answers } : {}) }); setPendingApproval(null);
+    },
+    approveAlways: (toolUseId: string) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+      send({ type: "approve", toolUseId, alwaysAllow: true }); setPendingApproval(null);
     },
     deny: (toolUseId: string, message?: string) => {
       if (wsRef.current?.readyState !== WebSocket.OPEN) return;
