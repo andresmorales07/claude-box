@@ -184,6 +184,26 @@ export class TestAdapter {
                 };
                 break;
             }
+            case "thinking": {
+                // Simulate streaming thinking deltas
+                checkAbort(abortSignal);
+                options.onThinkingDelta?.("I need to ");
+                await delay(50, abortSignal);
+                options.onThinkingDelta?.("analyze this ");
+                await delay(50, abortSignal);
+                options.onThinkingDelta?.("request carefully.");
+                checkAbort(abortSignal);
+                // Yield the complete assistant message with reasoning + text
+                yield {
+                    role: "assistant",
+                    parts: [
+                        { type: "reasoning", text: "I need to analyze this request carefully." },
+                        { type: "text", text: "Here is my response." },
+                    ],
+                    index: index++,
+                };
+                break;
+            }
             default: {
                 // Echo scenario (default)
                 checkAbort(abortSignal);

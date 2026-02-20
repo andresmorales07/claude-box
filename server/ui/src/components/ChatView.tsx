@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { ToolApproval } from "./ToolApproval";
+import { ThinkingIndicator } from "./ThinkingIndicator";
 import { SlashCommandDropdown, getFilteredCommands } from "./SlashCommandDropdown";
 import { useSession } from "../hooks/useSession";
 import type { SlashCommand } from "../types";
@@ -8,12 +9,24 @@ import type { SlashCommand } from "../types";
 interface Props { sessionId: string; token: string; }
 
 export function ChatView({ sessionId, token }: Props) {
-  const { messages, slashCommands, status, connected, pendingApproval, sendPrompt, approve, deny, interrupt } = useSession(sessionId, token);
+  const { messages, slashCommands, status, connected, pendingApproval, thinkingText, thinkingStartTime, sendPrompt, approve, deny, interrupt } = useSession(sessionId, token);
   const [input, setInput] = useState("");
   const [dropdownIndex, setDropdownIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  // Track the last thinking duration for completed thinking blocks
+  const thinkingDurationRef = useRef<number | null>(null);
+  const prevThinkingStartRef = useRef<number | null>(null);
+
+  // When thinkingStartTime clears (thinking complete), freeze the duration
+  useEffect(() => {
+    if (prevThinkingStartRef.current != null && thinkingStartTime == null) {
+      thinkingDurationRef.current = Date.now() - prevThinkingStartRef.current;
+    }
+    prevThinkingStartRef.current = thinkingStartTime;
+  }, [thinkingStartTime]);
+
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinkingText]);
 
   const filtered = useMemo(
     () => slashCommands.length > 0 ? getFilteredCommands(slashCommands, input) : [],
@@ -59,6 +72,8 @@ export function ChatView({ sessionId, token }: Props) {
     }
   };
 
+  const isThinkingActive = thinkingText.length > 0 && thinkingStartTime != null;
+
   return (
     <div className="chat-view">
       <div className="chat-header">
@@ -67,7 +82,8 @@ export function ChatView({ sessionId, token }: Props) {
         {(status === "running" || status === "starting") && <button onClick={interrupt} className="interrupt-btn">Stop</button>}
       </div>
       <div className="messages">
-        {messages.map((msg, i) => <MessageBubble key={i} message={msg} />)}
+        {messages.map((msg, i) => <MessageBubble key={i} message={msg} thinkingDurationMs={thinkingDurationRef.current} />)}
+        {isThinkingActive && <ThinkingIndicator thinkingText={thinkingText} startTime={thinkingStartTime!} />}
         <div ref={messagesEndRef} />
       </div>
       {pendingApproval && <ToolApproval toolName={pendingApproval.toolName} toolUseId={pendingApproval.toolUseId} input={pendingApproval.input} onApprove={approve} onDeny={deny} />}
