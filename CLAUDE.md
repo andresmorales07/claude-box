@@ -40,6 +40,14 @@ Two Docker volumes persist state across container restarts:
 ├── LICENSE
 ├── package.json            # Dev dependency: @playwright/test
 ├── playwright.config.ts    # Playwright config (Chromium only)
+├── .claude/
+│   ├── settings.json       # Hooks (TypeScript type-check on edit)
+│   ├── skills/
+│   │   ├── build-and-test/SKILL.md  # /build-and-test — rebuild dist, vitest, stage
+│   │   └── docker-e2e/SKILL.md      # /docker-e2e — Docker build + Playwright e2e
+│   └── agents/
+│       ├── security-reviewer.md     # Auth, path traversal, container security review
+│       └── ui-reviewer.md           # Accessibility, UX, React patterns review
 ├── .github/workflows/
 │   ├── ci.yml              # Build + healthcheck CI
 │   └── playwright.yml      # Playwright test CI
@@ -181,21 +189,23 @@ Playwright e2e tests cover the ttyd terminal, API endpoints, web UI, WebSocket c
 - `ws` → `http://localhost:8080` (WebSocket)
 - `static` → `http://localhost:8080` (static files)
 
+Ports are configurable via `TTYD_PORT` and `API_PORT` env vars (default to 7681/8080). When running tests inside hatchpod itself, use offset ports to avoid conflicts with the host services (e.g., `TTYD_PORT=17681 API_PORT=18080`).
+
 **Important:** Always run tests by building and running the Docker container first — do not run them against an externally running instance. The tests depend on the container's ttyd configuration (writable mode, auth credentials, ping interval).
 
 ```bash
-# 1. Build and run the container
+# 1. Build and run the container (use offset ports when running inside hatchpod)
 docker build -t hatchpod:latest .
 docker run -d --name hatchpod-test \
-  -p 7681:7681 -p 2222:2222 -p 8080:8080 \
+  -p 17681:7681 -p 12222:2222 -p 18080:8080 \
   -e TTYD_USERNAME=hatchpod \
   -e TTYD_PASSWORD=changeme \
   -e API_PASSWORD=changeme \
   hatchpod:latest
 
-# 2. Run tests (credentials must match the container's env vars)
+# 2. Run tests (pass offset ports via env vars)
 npm install
-npx playwright test
+TTYD_PORT=17681 API_PORT=18080 npx playwright test
 
 # 3. Clean up
 docker rm -f hatchpod-test
@@ -229,3 +239,23 @@ docker rm -f hatchpod-test
 - **Use Context7 MCP** (`mcp__plugin_context7_context7__resolve-library-id` and `query-docs`) for up-to-date library documentation instead of relying on web searches or cached knowledge.
 - **Use Serena MCP** for semantic code exploration (symbol overview, find references) when navigating the codebase efficiently.
 - **Follow the brainstorming → writing-plans → implementation pipeline** for any non-trivial feature work. Design docs go in `docs/plans/YYYY-MM-DD-<topic>-design.md`.
+
+### Skills
+
+User-invokable skills in `.claude/skills/`:
+
+- **`/build-and-test`** — After modifying `server/src/` files: rebuilds `server/dist/` via `npm run build`, runs vitest unit tests, and stages the rebuilt dist files. Stops on failure.
+- **`/docker-e2e`** — Full e2e test cycle: builds Docker image, starts a container on offset ports (17681/12222/18080), waits for healthy, runs Playwright tests, and cleans up. Safe to run inside hatchpod itself.
+
+### Subagents
+
+Specialized review agents in `.claude/agents/`:
+
+- **`security-reviewer`** — Reviews auth (bearer token, WebSocket, SSH, ttyd), path traversal (browse endpoint, session cwd), container security (Dockerfile, s6 scripts), and info disclosure. Reports findings with severity and file:line references.
+- **`ui-reviewer`** — Reviews the React frontend for WCAG 2.1 AA accessibility (keyboard nav, ARIA, contrast), UX states (loading, error, empty), responsive layout, and React patterns (effect cleanup, re-renders, stale closures).
+
+### Hooks
+
+Configured in `.claude/settings.json`:
+
+- **TypeScript type-check** (PostToolUse) — Runs `tsc --noEmit` after any Edit/Write to files under `server/src/` or `server/ui/src/`. Catches type errors immediately after edits.

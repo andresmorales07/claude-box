@@ -62,6 +62,11 @@ if ! shopt -oq posix; then
   fi
 fi
 
+# Start in workspace directory for login shells (matches ttyd and web UI)
+if shopt -q login_shell && [ "$PWD" = "$HOME" ]; then
+    cd ~/workspace 2>/dev/null || true
+fi
+
 # Auto-start tmux for mosh connections (mosh has no scrollback buffer).
 # Set NOTMUX=1 to bypass: NOTMUX=1 mosh ...
 if [[ -z "$TMUX" && -z "$NOTMUX" && -n "$MOSH_KEY" ]]; then
