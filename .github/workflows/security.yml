@@ -95,6 +95,7 @@ jobs:
           exit-code: 1
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          trivyignores: .trivyignore
 
   trivy-config:
     name: IaC Scan (Trivy)
