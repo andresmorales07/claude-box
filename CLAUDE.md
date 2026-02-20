@@ -50,7 +50,8 @@ Two Docker volumes persist state across container restarts:
 │       └── ui-reviewer.md           # Accessibility, UX, React patterns review
 ├── .github/workflows/
 │   ├── ci.yml              # Build + healthcheck CI
-│   └── playwright.yml      # Playwright test CI
+│   ├── playwright.yml      # Playwright test CI
+│   └── security.yml        # Security scanning (Hadolint, npm audit, Gitleaks, Trivy)
 ├── tests/                  # Playwright e2e tests
 │   ├── ttyd.spec.ts        # ttyd web terminal tests
 │   ├── api.spec.ts         # API endpoint tests (healthz, auth, sessions, browse)
@@ -63,7 +64,7 @@ Two Docker volumes persist state across container restarts:
 │   ├── tsconfig.json       # Server TypeScript config
 │   ├── src/                # Server source (TypeScript)
 │   │   ├── index.ts        # Entry point: HTTP + WS server
-│   │   ├── auth.ts         # Bearer token auth (API_PASSWORD)
+│   │   ├── auth.ts         # Bearer token auth, rate limiting (API_PASSWORD, TRUST_PROXY)
 │   │   ├── sessions.ts     # Session manager (provider-agnostic)
 │   │   ├── routes.ts       # REST route handlers (sessions, browse)
 │   │   ├── ws.ts           # WebSocket handler
@@ -149,7 +150,9 @@ Note: Without Sysbox, Docker-in-Docker will not work inside the nested container
 ## Authentication
 
 - **Claude Code** — users authenticate interactively by running `claude` inside the container and following the login link. Credentials are stored in `~/.claude/` which is backed by the `home` Docker volume, so they persist across container restarts.
-- **API server** — the REST API and web UI require a bearer token set via the `API_PASSWORD` environment variable. The web UI prompts for it on the login page; API clients pass it as `Authorization: Bearer <password>`.
+- **API server** — the REST API and web UI require a bearer token set via the `API_PASSWORD` environment variable. The web UI prompts for it on the login page; API clients pass it as `Authorization: Bearer <password>`. Failed auth attempts are rate-limited per IP (10 attempts / 15 min sliding window). Additional security env vars:
+  - `TRUST_PROXY=1` — trust `X-Forwarded-For` header for client IP resolution (required when behind a reverse proxy; without this, the rate limiter uses `req.socket.remoteAddress`)
+  - `ALLOW_BYPASS_PERMISSIONS=1` — allow sessions to use `bypassPermissions` mode (disabled by default for safety)
 
 ## Standalone Usage (without Docker)
 
