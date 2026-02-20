@@ -17,9 +17,7 @@ setInterval(() => {
 }, CLEANUP_INTERVAL_MS).unref();
 export function listSessions() {
     return Array.from(sessions.values()).map((s) => {
-        const lastModified = s.messages.length > 0
-            ? new Date().toISOString()
-            : s.createdAt.toISOString();
+        const lastModified = s.lastActivityAt.toISOString();
         return {
             id: s.id,
             status: s.status,
@@ -43,7 +41,11 @@ export async function listSessionsWithHistory(cwd) {
     try {
         history = await listSessionHistory(cwd);
     }
-    catch {
+    catch (err) {
+        const code = err?.code;
+        if (code !== "ENOENT") {
+            console.warn("Failed to list session history:", err);
+        }
         return liveSessions;
     }
     // Build set of provider session IDs that are already live
@@ -147,6 +149,7 @@ export async function createSession(req) {
         providerSessionId: req.resumeSessionId,
         status: hasPrompt ? "starting" : "idle",
         createdAt: new Date(),
+        lastActivityAt: new Date(),
         permissionMode: req.permissionMode ?? "default",
         model: req.model,
         cwd: req.cwd ?? (process.env.DEFAULT_CWD ?? process.cwd()),
@@ -221,6 +224,7 @@ async function runSession(session, prompt, allowedTools, resumeSessionId) {
                 continue;
             }
             session.messages.push(result.value);
+            session.lastActivityAt = new Date();
             broadcast(session, { type: "message", message: result.value });
         }
         const sessionResult = result.value;
@@ -301,7 +305,9 @@ export async function sendFollowUp(session, text) {
     }
     session.abortController = new AbortController();
     const isFirstMessage = session.status === "idle";
-    runSession(session, text, undefined, isFirstMessage ? undefined : (session.providerSessionId ?? session.id));
+    runSession(session, text, undefined, isFirstMessage
+        ? (session.providerSessionId ?? undefined)
+        : (session.providerSessionId ?? session.id));
     return true;
 }
 /** Abort all sessions, terminate WS clients, and clear the session map. For tests. */

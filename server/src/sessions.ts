@@ -24,9 +24,7 @@ setInterval(() => {
 
 export function listSessions(): SessionSummaryDTO[] {
   return Array.from(sessions.values()).map((s) => {
-    const lastModified = s.messages.length > 0
-      ? new Date().toISOString()
-      : s.createdAt.toISOString();
+    const lastModified = s.lastActivityAt.toISOString();
     return {
       id: s.id,
       status: s.status,
@@ -51,7 +49,11 @@ export async function listSessionsWithHistory(cwd?: string): Promise<SessionSumm
   let history: Awaited<ReturnType<typeof listSessionHistory>>;
   try {
     history = await listSessionHistory(cwd);
-  } catch {
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code !== "ENOENT") {
+      console.warn("Failed to list session history:", err);
+    }
     return liveSessions;
   }
 
@@ -165,6 +167,7 @@ export async function createSession(
     providerSessionId: req.resumeSessionId,
     status: hasPrompt ? "starting" : "idle",
     createdAt: new Date(),
+    lastActivityAt: new Date(),
     permissionMode: req.permissionMode ?? "default",
     model: req.model,
     cwd: req.cwd ?? (process.env.DEFAULT_CWD ?? process.cwd()),
@@ -247,6 +250,7 @@ async function runSession(
         continue;
       }
       session.messages.push(result.value);
+      session.lastActivityAt = new Date();
       broadcast(session, { type: "message", message: result.value });
     }
 
@@ -345,7 +349,9 @@ export async function sendFollowUp(
     session,
     text,
     undefined,
-    isFirstMessage ? undefined : (session.providerSessionId ?? session.id),
+    isFirstMessage
+      ? (session.providerSessionId ?? undefined)
+      : (session.providerSessionId ?? session.id),
   );
   return true;
 }

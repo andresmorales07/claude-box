@@ -48,57 +48,63 @@ async function parseSessionMetadata(
   let cwd = "";
   let firstTimestamp: string | null = null;
 
+  const stream = createReadStream(filePath, { encoding: "utf-8" });
   const rl = createInterface({
-    input: createReadStream(filePath, { encoding: "utf-8" }),
+    input: stream,
     crlfDelay: Infinity,
   });
 
-  let lineCount = 0;
-  for await (const line of rl) {
-    if (lineCount++ >= MAX_LINES_TO_READ) break;
-    if (!line.trim()) continue;
+  try {
+    let lineCount = 0;
+    for await (const line of rl) {
+      if (lineCount++ >= MAX_LINES_TO_READ) break;
+      if (!line.trim()) continue;
 
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      continue;
-    }
-
-    // Extract slug (first non-null occurrence)
-    if (!slug && typeof parsed.slug === "string" && parsed.slug) {
-      slug = parsed.slug;
-    }
-
-    // Extract cwd
-    if (!cwd && typeof parsed.cwd === "string" && parsed.cwd) {
-      cwd = parsed.cwd;
-    }
-
-    // Extract first timestamp
-    if (!firstTimestamp && typeof parsed.timestamp === "string") {
-      firstTimestamp = parsed.timestamp;
-    }
-
-    // Extract first user message as summary
-    if (
-      !summary &&
-      parsed.type === "user" &&
-      parsed.message &&
-      typeof parsed.message === "object"
-    ) {
-      const msg = parsed.message as Record<string, unknown>;
-      if (typeof msg.content === "string" && msg.content && !msg.content.startsWith("<")) {
-        summary = msg.content.length > MAX_SUMMARY_LENGTH
-          ? msg.content.slice(0, MAX_SUMMARY_LENGTH)
-          : msg.content;
-        // Collapse newlines for display
-        summary = summary.replace(/\n+/g, " ").trim();
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        continue;
       }
-    }
 
-    // Early exit if we have everything
-    if (slug && summary && cwd && firstTimestamp) break;
+      // Extract slug (first non-null occurrence)
+      if (!slug && typeof parsed.slug === "string" && parsed.slug) {
+        slug = parsed.slug;
+      }
+
+      // Extract cwd
+      if (!cwd && typeof parsed.cwd === "string" && parsed.cwd) {
+        cwd = parsed.cwd;
+      }
+
+      // Extract first timestamp
+      if (!firstTimestamp && typeof parsed.timestamp === "string") {
+        firstTimestamp = parsed.timestamp;
+      }
+
+      // Extract first user message as summary
+      if (
+        !summary &&
+        parsed.type === "user" &&
+        parsed.message &&
+        typeof parsed.message === "object"
+      ) {
+        const msg = parsed.message as Record<string, unknown>;
+        if (typeof msg.content === "string" && msg.content && !msg.content.startsWith("<")) {
+          summary = msg.content.length > MAX_SUMMARY_LENGTH
+            ? msg.content.slice(0, MAX_SUMMARY_LENGTH)
+            : msg.content;
+          // Collapse newlines for display
+          summary = summary.replace(/\n+/g, " ").trim();
+        }
+      }
+
+      // Early exit if we have everything
+      if (slug && summary && cwd && firstTimestamp) break;
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
   }
 
   return {
@@ -118,7 +124,11 @@ export async function listSessionHistory(cwd: string): Promise<HistorySession[]>
   let entries: string[];
   try {
     entries = await readdir(projectDir);
-  } catch {
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code !== "ENOENT") {
+      console.warn(`Failed to read project directory ${projectDir}:`, err);
+    }
     return [];
   }
 
@@ -135,7 +145,11 @@ export async function listSessionHistory(cwd: string): Promise<HistorySession[]>
     let fileStat;
     try {
       fileStat = await stat(filePath);
-    } catch {
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (code !== "ENOENT") {
+        console.warn(`Failed to stat ${filePath}:`, err);
+      }
       continue;
     }
 

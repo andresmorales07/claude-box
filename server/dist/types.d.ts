@@ -7,6 +7,7 @@ export interface Session {
     providerSessionId?: string;
     status: SessionStatus;
     createdAt: Date;
+    lastActivityAt: Date;
     permissionMode: PermissionModeCommon;
     model: string | undefined;
     cwd: string;

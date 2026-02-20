@@ -5,6 +5,7 @@ import { listSessionsWithHistory, getSession, sessionToDTO, getSessionCount, cre
 import { listProviders } from "./providers/index.js";
 const startTime = Date.now();
 const SESSION_ID_RE = /^\/api\/sessions\/([0-9a-f-]{36})$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const BROWSE_ROOT = process.env.BROWSE_ROOT ?? process.cwd();
 const ALLOW_BYPASS_PERMISSIONS = process.env.ALLOW_BYPASS_PERMISSIONS === "1";
 // Must match PermissionModeCommon from providers/types.ts (minus "bypassPermissions" which is gated separately)
@@ -92,6 +93,13 @@ export async function handleRequest(req, res) {
                 return;
             }
         }
+        // Validate resumeSessionId is a UUID
+        if (parsed.resumeSessionId !== undefined) {
+            if (typeof parsed.resumeSessionId !== "string" || !UUID_RE.test(parsed.resumeSessionId)) {
+                json(res, 400, { error: "resumeSessionId must be a valid UUID" });
+                return;
+            }
+        }
         // Validate cwd is under BROWSE_ROOT
         if (parsed.cwd !== undefined) {
             if (typeof parsed.cwd !== "string" || parsed.cwd.includes("\0")) {
@@ -121,6 +129,17 @@ export async function handleRequest(req, res) {
     // GET /api/sessions — list sessions (optionally filtered by CWD for history)
     if (pathname === "/api/sessions" && method === "GET") {
         const cwd = url.searchParams.get("cwd") ?? undefined;
+        if (cwd !== undefined) {
+            if (cwd.includes("\0")) {
+                json(res, 400, { error: "invalid cwd" });
+                return;
+            }
+            const absCwd = resolve(BROWSE_ROOT, cwd);
+            if (absCwd !== BROWSE_ROOT && !absCwd.startsWith(BROWSE_ROOT + "/")) {
+                json(res, 400, { error: "cwd must be within the workspace" });
+                return;
+            }
+        }
         try {
             const sessions = await listSessionsWithHistory(cwd);
             json(res, 200, sessions);
