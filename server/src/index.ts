@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer as createHttpServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,12 +6,6 @@ import { WebSocketServer } from "ws";
 import { requirePassword } from "./auth.js";
 import { handleRequest } from "./routes.js";
 import { handleWsConnection, extractSessionIdFromPath } from "./ws.js";
-
-// Require API_PASSWORD on startup
-requirePassword();
-
-const PORT = parseInt(process.env.PORT ?? "8080", 10);
-const HOST = process.env.HOST ?? "0.0.0.0";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -49,59 +43,71 @@ async function serveStatic(pathname: string): Promise<{ data: Buffer; contentTyp
   }
 }
 
-const server = createServer(async (req, res) => {
-  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-  const pathname = url.pathname;
+export function createApp() {
+  const server = createHttpServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+    const pathname = url.pathname;
 
-  // API and health routes
-  if (pathname === "/healthz" || pathname.startsWith("/api/")) {
-    await handleRequest(req, res);
-    return;
-  }
-
-  // Static file serving
-  const result = await serveStatic(pathname === "/" ? "/index.html" : pathname);
-  if (result) {
-    res.writeHead(200, { "Content-Type": result.contentType });
-    res.end(result.data);
-    return;
-  }
-
-  // SPA fallback: serve index.html for paths without file extensions
-  const ext = extname(pathname);
-  if (!ext) {
-    const indexResult = await serveStatic("/index.html");
-    if (indexResult) {
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(indexResult.data);
+    // API and health routes
+    if (pathname === "/healthz" || pathname.startsWith("/api/")) {
+      await handleRequest(req, res);
       return;
     }
-  }
 
-  // 404
-  res.writeHead(404, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ error: "not found" }));
-});
+    // Static file serving
+    const result = await serveStatic(pathname === "/" ? "/index.html" : pathname);
+    if (result) {
+      res.writeHead(200, { "Content-Type": result.contentType });
+      res.end(result.data);
+      return;
+    }
 
-// WebSocket upgrade handling — authentication happens via first message, not URL
-const wss = new WebSocketServer({ noServer: true });
+    // SPA fallback: serve index.html for paths without file extensions
+    const ext = extname(pathname);
+    if (!ext) {
+      const indexResult = await serveStatic("/index.html");
+      if (indexResult) {
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(indexResult.data);
+        return;
+      }
+    }
 
-server.on("upgrade", (req, socket, head) => {
-  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-
-  // Extract session ID from path (auth happens after upgrade via first message)
-  const sessionId = extractSessionIdFromPath(url.pathname);
-  if (!sessionId) {
-    socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
-    socket.destroy();
-    return;
-  }
-
-  wss.handleUpgrade(req, socket, head, (ws) => {
-    handleWsConnection(ws, sessionId);
+    // 404
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "not found" }));
   });
-});
 
-server.listen(PORT, HOST, () => {
-  console.log(`hatchpod API server listening on ${HOST}:${PORT}`);
-});
+  // WebSocket upgrade handling — authentication happens via first message, not URL
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on("upgrade", (req, socket, head) => {
+    const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+
+    // Extract session ID from path (auth happens after upgrade via first message)
+    const sessionId = extractSessionIdFromPath(url.pathname);
+    if (!sessionId) {
+      socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      handleWsConnection(ws, sessionId);
+    });
+  });
+
+  return { server, wss };
+}
+
+// Auto-listen when run directly (node dist/index.js) or via CLI (HATCHPOD_AUTO_LISTEN=1)
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isDirectRun || process.env.HATCHPOD_AUTO_LISTEN === "1") {
+  requirePassword();
+  const PORT = parseInt(process.env.PORT ?? "8080", 10);
+  const HOST = process.env.HOST ?? "0.0.0.0";
+  const { server } = createApp();
+  server.listen(PORT, HOST, () => {
+    console.log(`hatchpod API server listening on ${HOST}:${PORT}`);
+  });
+}

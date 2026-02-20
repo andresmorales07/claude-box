@@ -14,7 +14,7 @@ setInterval(() => {
             sessions.delete(id);
         }
     }
-}, CLEANUP_INTERVAL_MS);
+}, CLEANUP_INTERVAL_MS).unref();
 export function listSessions() {
     return Array.from(sessions.values()).map((s) => ({
         id: s.id,
@@ -211,4 +211,18 @@ export async function sendFollowUp(session, text) {
     const isFirstMessage = session.status === "idle";
     runSession(session, text, undefined, isFirstMessage ? undefined : (session.providerSessionId ?? session.id));
     return true;
+}
+/** Abort all sessions, terminate WS clients, and clear the session map. For tests. */
+export function clearSessions() {
+    for (const session of sessions.values()) {
+        session.abortController.abort();
+        for (const client of session.clients) {
+            try {
+                client.terminate();
+            }
+            catch { }
+        }
+        session.clients.clear();
+    }
+    sessions.clear();
 }

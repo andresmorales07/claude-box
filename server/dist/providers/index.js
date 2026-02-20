@@ -1,4 +1,5 @@
 import { ClaudeAdapter } from "./claude-adapter.js";
+import { TestAdapter } from "./test-adapter.js";
 const adapters = new Map();
 export function registerProvider(adapter) {
     adapters.set(adapter.id, adapter);
@@ -14,3 +15,4 @@ export function listProviders() {
 }
 // Register built-in providers
 registerProvider(new ClaudeAdapter());
+registerProvider(new TestAdapter());

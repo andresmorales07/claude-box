@@ -20,7 +20,7 @@ setInterval(() => {
       sessions.delete(id);
     }
   }
-}, CLEANUP_INTERVAL_MS);
+}, CLEANUP_INTERVAL_MS).unref();
 
 export function listSessions(): SessionSummaryDTO[] {
   return Array.from(sessions.values()).map((s) => ({
@@ -254,4 +254,16 @@ export async function sendFollowUp(
     isFirstMessage ? undefined : (session.providerSessionId ?? session.id),
   );
   return true;
+}
+
+/** Abort all sessions, terminate WS clients, and clear the session map. For tests. */
+export function clearSessions(): void {
+  for (const session of sessions.values()) {
+    session.abortController.abort();
+    for (const client of session.clients) {
+      try { client.terminate(); } catch {}
+    }
+    session.clients.clear();
+  }
+  sessions.clear();
 }

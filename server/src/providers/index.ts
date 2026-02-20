@@ -1,5 +1,6 @@
 import type { ProviderAdapter } from "./types.js";
 import { ClaudeAdapter } from "./claude-adapter.js";
+import { TestAdapter } from "./test-adapter.js";
 
 const adapters = new Map<string, ProviderAdapter>();
 
@@ -19,3 +20,4 @@ export function listProviders(): Array<{ id: string; name: string }> {
 
 // Register built-in providers
 registerProvider(new ClaudeAdapter());
+registerProvider(new TestAdapter());
