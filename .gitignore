@@ -11,6 +11,9 @@ node_modules/
 /playwright/.cache/
 /playwright/.auth/
 
+# Plan files (ephemeral — PRs are the permanent record)
+docs/plans/
+
 # API server UI
 server/ui/node_modules/
 server/public/
