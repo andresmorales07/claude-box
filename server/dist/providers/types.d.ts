@@ -63,6 +63,7 @@ export interface ToolApprovalRequest {
 export interface ApprovalDecision {
     allow: boolean;
     message?: string;
+    updatedInput?: Record<string, unknown>;
 }
 export type PermissionModeCommon = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "delegate" | "dontAsk";
 export interface ProviderSessionOptions {

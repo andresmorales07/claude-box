@@ -21,7 +21,7 @@ interface SessionHook {
   thinkingStartTime: number | null;
   thinkingDurations: Record<number, number>;
   sendPrompt: (text: string) => void;
-  approve: (toolUseId: string) => void;
+  approve: (toolUseId: string, answers?: Record<string, string>) => void;
   deny: (toolUseId: string, message?: string) => void;
   interrupt: () => void;
 }
@@ -128,7 +128,7 @@ export function useSession(sessionId: string | null, token: string): SessionHook
   return {
     messages, slashCommands, status, connected, pendingApproval, thinkingText, thinkingStartTime, thinkingDurations,
     sendPrompt: (text: string) => send({ type: "prompt", text }),
-    approve: (toolUseId: string) => { send({ type: "approve", toolUseId }); setPendingApproval(null); },
+    approve: (toolUseId: string, answers?: Record<string, string>) => { send({ type: "approve", toolUseId, ...(answers ? { answers } : {}) }); setPendingApproval(null); },
     deny: (toolUseId: string, message?: string) => { send({ type: "deny", toolUseId, message }); setPendingApproval(null); },
     interrupt: () => send({ type: "interrupt" }),
   };

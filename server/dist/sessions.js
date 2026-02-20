@@ -201,7 +201,7 @@ export function interruptSession(id) {
     broadcast(session, { type: "status", status: "interrupted" });
     return true;
 }
-export function handleApproval(session, toolUseId, allow, message) {
+export function handleApproval(session, toolUseId, allow, message, answers) {
     if (!session.pendingApproval ||
         session.pendingApproval.toolUseId !== toolUseId)
         return false;
@@ -210,7 +210,10 @@ export function handleApproval(session, toolUseId, allow, message) {
     session.status = "running";
     broadcast(session, { type: "status", status: "running" });
     if (allow) {
-        approval.resolve({ allow: true });
+        const updatedInput = answers
+            ? { ...approval.input, answers }
+            : undefined;
+        approval.resolve({ allow: true, updatedInput });
     }
     else {
         approval.resolve({ allow: false, message: message ?? "Denied by user" });

@@ -132,7 +132,7 @@ function setupSessionConnection(ws: WebSocket, sessionId: string): void {
         break;
 
       case "approve":
-        handleApproval(session, parsed.toolUseId, true);
+        handleApproval(session, parsed.toolUseId, true, undefined, parsed.answers);
         break;
 
       case "deny":

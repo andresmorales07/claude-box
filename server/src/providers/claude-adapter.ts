@@ -178,7 +178,10 @@ export class ClaudeAdapter implements ProviderAdapter {
                     input,
                   });
                   if (decision.allow) {
-                    return { behavior: "allow" };
+                    return {
+                      behavior: "allow" as const,
+                      ...(decision.updatedInput ? { updatedInput: decision.updatedInput } : {}),
+                    };
                   }
                   return {
                     behavior: "deny",

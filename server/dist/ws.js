@@ -110,7 +110,7 @@ function setupSessionConnection(ws, sessionId) {
                 sendFollowUp(session, parsed.text);
                 break;
             case "approve":
-                handleApproval(session, parsed.toolUseId, true);
+                handleApproval(session, parsed.toolUseId, true, undefined, parsed.answers);
                 break;
             case "deny":
                 handleApproval(session, parsed.toolUseId, false, parsed.message);
