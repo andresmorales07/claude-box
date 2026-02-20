@@ -105,6 +105,7 @@ export interface ProviderSessionOptions {
   abortSignal: AbortSignal;
   resumeSessionId?: string;
   onToolApproval: (request: ToolApprovalRequest) => Promise<ApprovalDecision>;
+  onThinkingDelta?: (text: string) => void;
 }
 
 export interface ProviderSessionResult {

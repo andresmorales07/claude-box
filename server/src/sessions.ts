@@ -161,6 +161,9 @@ async function runSession(
             input: request.input,
           });
         }),
+      onThinkingDelta: (text: string) => {
+        broadcast(session, { type: "thinking_delta", text });
+      },
     });
 
     // Manual iteration instead of for-await because we need the generator's
