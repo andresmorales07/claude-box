@@ -1,0 +1,114 @@
+name: Security Scanning
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  hadolint:
+    name: Dockerfile Lint (Hadolint)
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          failure-threshold: warning
+
+  npm-audit:
+    name: npm Audit
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: cd server && npm ci
+
+      - name: Audit server dependencies
+        run: cd server && npm audit --audit-level=high
+
+      - name: Install UI dependencies
+        run: cd server/ui && npm ci
+
+      - name: Audit UI dependencies
+        run: cd server/ui && npm audit --audit-level=high
+
+  gitleaks:
+    name: Secret Scanning (Gitleaks)
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  trivy-image:
+    name: Container Image Scan (Trivy)
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: hatchpod:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: hatchpod:scan
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+  trivy-config:
+    name: IaC Scan (Trivy)
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy config scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
