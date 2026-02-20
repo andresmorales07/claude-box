@@ -14,3 +14,8 @@ export function listProviders() {
 }
 // Register built-in providers
 registerProvider(new ClaudeAdapter());
+// Register test provider only in test/development environments
+if (process.env.NODE_ENV === "test" || process.env.ENABLE_TEST_PROVIDER === "1") {
+    const { TestAdapter } = await import("./test-adapter.js");
+    registerProvider(new TestAdapter());
+}

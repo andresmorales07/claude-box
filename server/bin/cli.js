@@ -81,4 +81,5 @@ if (!flags.noOpen) {
 }
 
 // ── Start the server ─────────────────────────────────────────
+env.HATCHPOD_AUTO_LISTEN = "1";
 await import("../dist/index.js");

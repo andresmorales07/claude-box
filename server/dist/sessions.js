@@ -14,7 +14,7 @@ setInterval(() => {
             sessions.delete(id);
         }
     }
-}, CLEANUP_INTERVAL_MS);
+}, CLEANUP_INTERVAL_MS).unref();
 export function listSessions() {
     return Array.from(sessions.values()).map((s) => ({
         id: s.id,
@@ -166,7 +166,16 @@ async function runSession(session, prompt, allowedTools, resumeSessionId) {
     }
     catch (err) {
         const currentStatus = session.status;
-        if (currentStatus !== "interrupted") {
+        const isAbortError = err instanceof Error &&
+            (err.name === "AbortError" || err.message === "aborted" || err.message.includes("abort"));
+        if (currentStatus === "interrupted" && isAbortError) {
+            // Expected abort from interruption — not an error
+        }
+        else if (currentStatus === "interrupted") {
+            // Interrupted, but the error is NOT an abort error — log it
+            console.error(`Session ${session.id} unexpected error during interruption:`, err);
+        }
+        else {
             session.status = "error";
             session.lastError = String(err);
             console.error(`Session ${session.id} error:`, err);
@@ -211,4 +220,20 @@ export async function sendFollowUp(session, text) {
     const isFirstMessage = session.status === "idle";
     runSession(session, text, undefined, isFirstMessage ? undefined : (session.providerSessionId ?? session.id));
     return true;
+}
+/** Abort all sessions, terminate WS clients, and clear the session map. For tests. */
+export function clearSessions() {
+    for (const session of sessions.values()) {
+        session.abortController.abort();
+        for (const client of session.clients) {
+            try {
+                client.terminate();
+            }
+            catch (err) {
+                console.error(`Failed to terminate WS client in session ${session.id}:`, err);
+            }
+        }
+        session.clients.clear();
+    }
+    sessions.clear();
 }

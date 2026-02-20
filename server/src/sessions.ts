@@ -20,7 +20,7 @@ setInterval(() => {
       sessions.delete(id);
     }
   }
-}, CLEANUP_INTERVAL_MS);
+}, CLEANUP_INTERVAL_MS).unref();
 
 export function listSessions(): SessionSummaryDTO[] {
   return Array.from(sessions.values()).map((s) => ({
@@ -191,7 +191,15 @@ async function runSession(
     }
   } catch (err) {
     const currentStatus = session.status as Session["status"];
-    if (currentStatus !== "interrupted") {
+    const isAbortError = err instanceof Error &&
+      (err.name === "AbortError" || err.message === "aborted" || err.message.includes("abort"));
+
+    if (currentStatus === "interrupted" && isAbortError) {
+      // Expected abort from interruption — not an error
+    } else if (currentStatus === "interrupted") {
+      // Interrupted, but the error is NOT an abort error — log it
+      console.error(`Session ${session.id} unexpected error during interruption:`, err);
+    } else {
       session.status = "error";
       session.lastError = String(err);
       console.error(`Session ${session.id} error:`, err);
@@ -254,4 +262,20 @@ export async function sendFollowUp(
     isFirstMessage ? undefined : (session.providerSessionId ?? session.id),
   );
   return true;
+}
+
+/** Abort all sessions, terminate WS clients, and clear the session map. For tests. */
+export function clearSessions(): void {
+  for (const session of sessions.values()) {
+    session.abortController.abort();
+    for (const client of session.clients) {
+      try {
+        client.terminate();
+      } catch (err) {
+        console.error(`Failed to terminate WS client in session ${session.id}:`, err);
+      }
+    }
+    session.clients.clear();
+  }
+  sessions.clear();
 }
