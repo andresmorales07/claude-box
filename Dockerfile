@@ -69,9 +69,10 @@ RUN install -m 0755 -d /etc/apt/keyrings \
 # /proc/sys is a FUSE mount (sysboxfs), which triggers "unsafe procfs detected" and blocks
 # all container launches. Sysbox on the host already provides equivalent isolation.
 RUN ARCH="$(dpkg --print-architecture)" \
-    && curl -fsSL "https://github.com/opencontainers/runc/releases/download/v${RUNC_VERSION}/runc.${ARCH}" -o /usr/bin/runc \
+    && curl -fsSL "https://github.com/opencontainers/runc/releases/download/v${RUNC_VERSION}/runc.${ARCH}" -o /tmp/runc.${ARCH} \
     && curl -fsSL "https://github.com/opencontainers/runc/releases/download/v${RUNC_VERSION}/runc.sha256sum" -o /tmp/runc.sha256sum \
-    && cd /usr/bin && grep "runc.${ARCH}" /tmp/runc.sha256sum | sha256sum -c - \
+    && cd /tmp && grep "runc.${ARCH}" /tmp/runc.sha256sum | sha256sum -c - \
+    && mv /tmp/runc.${ARCH} /usr/bin/runc \
     && rm /tmp/runc.sha256sum \
     && chmod +x /usr/bin/runc
 

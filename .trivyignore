@@ -1,0 +1,2 @@
+# s6-overlay requires root as PID 1 — USER root is intentional
+DS002
