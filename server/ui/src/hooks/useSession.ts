@@ -6,6 +6,7 @@ type ServerMessage =
   | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown }
   | { type: "status"; status: string; error?: string }
   | { type: "slash_commands"; commands: SlashCommand[] }
+  | { type: "thinking_delta"; text: string }
   | { type: "replay_complete" }
   | { type: "ping" }
   | { type: "error"; message: string; error?: string };
@@ -16,6 +17,9 @@ interface SessionHook {
   status: string;
   connected: boolean;
   pendingApproval: { toolName: string; toolUseId: string; input: unknown } | null;
+  thinkingText: string;
+  thinkingStartTime: number | null;
+  thinkingDurations: Record<number, number>;
   sendPrompt: (text: string) => void;
   approve: (toolUseId: string) => void;
   deny: (toolUseId: string, message?: string) => void;
@@ -31,6 +35,11 @@ export function useSession(sessionId: string | null, token: string): SessionHook
   const [connected, setConnected] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<SessionHook["pendingApproval"]>(null);
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
+  const [thinkingText, setThinkingText] = useState("");
+  const [thinkingStartTime, setThinkingStartTime] = useState<number | null>(null);
+  const [thinkingDurations, setThinkingDurations] = useState<Record<number, number>>({});
+  const thinkingStartRef = useRef<number | null>(null);
+  const messageCountRef = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const reconnectAttempts = useRef(0);
@@ -54,8 +63,37 @@ export function useSession(sessionId: string | null, token: string): SessionHook
         return;
       }
       switch (msg.type) {
-        case "message": setMessages((prev) => [...prev, msg.message]); break;
-        case "status": setStatus(msg.status); break;
+        case "message": {
+          const m = msg.message;
+          const msgIdx = messageCountRef.current;
+          messageCountRef.current++;
+          if (m.role === "assistant" && m.parts.some((p) => p.type === "reasoning")) {
+            if (thinkingStartRef.current != null) {
+              const duration = Date.now() - thinkingStartRef.current;
+              setThinkingDurations((prev) => ({ ...prev, [msgIdx]: duration }));
+            }
+            thinkingStartRef.current = null;
+            setThinkingText("");
+            setThinkingStartTime(null);
+          }
+          setMessages((prev) => [...prev, m]);
+          break;
+        }
+        case "status":
+          setStatus(msg.status);
+          if (msg.status !== "running") {
+            thinkingStartRef.current = null;
+            setThinkingText("");
+            setThinkingStartTime(null);
+          }
+          break;
+        case "thinking_delta":
+          setThinkingText((prev) => prev + msg.text);
+          if (thinkingStartRef.current == null) {
+            thinkingStartRef.current = Date.now();
+          }
+          setThinkingStartTime(thinkingStartRef.current);
+          break;
         case "tool_approval_request": setPendingApproval({ toolName: msg.toolName, toolUseId: msg.toolUseId, input: msg.input }); break;
         case "slash_commands": if (Array.isArray(msg.commands)) setSlashCommands(msg.commands); break;
         case "replay_complete": break;
@@ -77,6 +115,8 @@ export function useSession(sessionId: string | null, token: string): SessionHook
 
   useEffect(() => {
     setMessages([]); setStatus("starting"); setPendingApproval(null); setSlashCommands([]);
+    setThinkingText(""); setThinkingStartTime(null); setThinkingDurations({});
+    thinkingStartRef.current = null; messageCountRef.current = 0;
     connect();
     return () => { clearTimeout(reconnectTimer.current); wsRef.current?.close(); };
   }, [connect]);
@@ -86,7 +126,7 @@ export function useSession(sessionId: string | null, token: string): SessionHook
   }, []);
 
   return {
-    messages, slashCommands, status, connected, pendingApproval,
+    messages, slashCommands, status, connected, pendingApproval, thinkingText, thinkingStartTime, thinkingDurations,
     sendPrompt: (text: string) => send({ type: "prompt", text }),
     approve: (toolUseId: string) => { send({ type: "approve", toolUseId }); setPendingApproval(null); },
     deny: (toolUseId: string, message?: string) => { send({ type: "deny", toolUseId, message }); setPendingApproval(null); },

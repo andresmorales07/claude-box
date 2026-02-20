@@ -203,6 +203,26 @@ export class ClaudeAdapter implements ProviderAdapter {
       );
 
       for await (const sdkMessage of queryHandle) {
+        // Handle streaming thinking deltas (raw API events).
+        // stream_events are raw API-level; only thinking_delta is forwarded.
+        if (sdkMessage.type === "stream_event") {
+          const event = (sdkMessage as { type: string; event: Record<string, unknown> }).event;
+          if (
+            event?.type === "content_block_delta" &&
+            (event.delta as Record<string, unknown>)?.type === "thinking_delta"
+          ) {
+            const thinking = (event.delta as Record<string, unknown>)?.thinking;
+            if (typeof thinking === "string") {
+              try {
+                options.onThinkingDelta?.(thinking);
+              } catch (err) {
+                console.error("Failed to deliver thinking delta:", err);
+              }
+            }
+          }
+          continue;
+        }
+
         // Capture result data before normalizing
         if (sdkMessage.type === "result") {
           const resultMsg = sdkMessage as SDKResultMessage;

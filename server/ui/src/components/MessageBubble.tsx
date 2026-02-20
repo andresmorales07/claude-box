@@ -1,8 +1,12 @@
 import type { NormalizedMessage, MessagePart } from "../types";
+import { ThinkingBlock } from "./ThinkingBlock";
 
-interface Props { message: NormalizedMessage; }
+interface Props {
+  message: NormalizedMessage;
+  thinkingDurationMs: number | null;
+}
 
-function renderPart(part: MessagePart, i: number) {
+function renderPart(part: MessagePart, i: number, thinkingDurationMs: number | null) {
   switch (part.type) {
     case "text":
       return <pre key={i}>{part.text}</pre>;
@@ -20,7 +24,7 @@ function renderPart(part: MessagePart, i: number) {
         </div>
       );
     case "reasoning":
-      return <div key={i} className="reasoning"><em>{part.text}</em></div>;
+      return <ThinkingBlock key={i} text={part.text} durationMs={thinkingDurationMs} />;
     case "error":
       return <div key={i} className="message error">{part.message}</div>;
     default:
@@ -28,7 +32,7 @@ function renderPart(part: MessagePart, i: number) {
   }
 }
 
-export function MessageBubble({ message }: Props) {
+export function MessageBubble({ message, thinkingDurationMs }: Props) {
   if (message.role === "user") {
     const text = message.parts
       .filter((p): p is { type: "text"; text: string } => p.type === "text")
@@ -39,7 +43,7 @@ export function MessageBubble({ message }: Props) {
   }
 
   if (message.role === "assistant") {
-    return <>{message.parts.map(renderPart)}</>;
+    return <>{message.parts.map((part, i) => renderPart(part, i, thinkingDurationMs))}</>;
   }
 
   if (message.role === "system" && message.event.type === "session_result") {

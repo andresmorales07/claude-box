@@ -82,6 +82,9 @@ export type ServerMessage = {
     type: "slash_commands";
     commands: SlashCommand[];
 } | {
+    type: "thinking_delta";
+    text: string;
+} | {
     type: "replay_complete";
 } | {
     type: "ping";

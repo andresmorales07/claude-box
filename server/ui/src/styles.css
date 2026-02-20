@@ -334,6 +334,104 @@ body {
   color: var(--warning);
 }
 
+/* === Thinking Block (completed) === */
+.thinking-block {
+  align-self: flex-start;
+  max-width: 90%;
+}
+
+.thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  padding: 0.375rem 0;
+  transition: color 0.2s ease;
+}
+
+.thinking-header:hover {
+  color: var(--text);
+}
+
+.thinking-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.thinking-dot.done {
+  background: var(--text-muted);
+}
+
+.thinking-dot.active {
+  background: var(--accent);
+  animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+.thinking-label {
+  white-space: nowrap;
+}
+
+.thinking-chevron {
+  font-size: 0.625rem;
+  transition: transform 0.2s ease;
+  margin-left: auto;
+}
+
+.thinking-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.thinking-content {
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  border-left: 2px solid var(--border);
+  padding: 0.5rem 0 0.5rem 0.75rem;
+  margin: 0.25rem 0 0.25rem 3px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* === Thinking Indicator (active/streaming) === */
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  font-size: 0.8125rem;
+  align-self: flex-start;
+}
+
+.thinking-indicator .thinking-text {
+  color: var(--accent);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 500px;
+}
+
+.thinking-indicator .thinking-elapsed {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
 /* === Tool Approval === */
 .tool-approval {
   padding: 1rem;
@@ -668,6 +766,10 @@ body {
   }
 
   .message {
+    max-width: 70%;
+  }
+
+  .thinking-block {
     max-width: 70%;
   }
 }

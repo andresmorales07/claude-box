@@ -68,6 +68,7 @@ export type ServerMessage =
   | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown }
   | { type: "status"; status: SessionStatus; error?: string }
   | { type: "slash_commands"; commands: SlashCommand[] }
+  | { type: "thinking_delta"; text: string }
   | { type: "replay_complete" }
   | { type: "ping" }
   | { type: "error"; message: string };
