@@ -73,7 +73,12 @@ export function createApp() {
       // Static file serving
       const result = await serveStatic(pathname === "/" ? "/index.html" : pathname);
       if (result) {
-        res.writeHead(200, { "Content-Type": result.contentType });
+        // Hashed assets (Vite content-hashed filenames) can be cached forever;
+        // everything else (index.html) must revalidate so image updates take effect.
+        const cacheControl = pathname.startsWith("/assets/")
+          ? "public, max-age=31536000, immutable"
+          : "no-cache";
+        res.writeHead(200, { "Content-Type": result.contentType, "Cache-Control": cacheControl });
         res.end(result.data);
         return;
       }
@@ -83,7 +88,7 @@ export function createApp() {
       if (!ext) {
         const indexResult = await serveStatic("/index.html");
         if (indexResult) {
-          res.writeHead(200, { "Content-Type": "text/html" });
+          res.writeHead(200, { "Content-Type": "text/html", "Cache-Control": "no-cache" });
           res.end(indexResult.data);
           return;
         }
