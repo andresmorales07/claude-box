@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface Props {
   token: string;
@@ -13,10 +15,8 @@ export function FolderPicker({ token, cwd, browseRoot, onCwdChange, onStartSessi
   const [dirs, setDirs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Derive the display name from the last segment of browseRoot
   const rootName = browseRoot.split("/").filter(Boolean).pop() ?? "root";
 
-  // Relative path from browse root
   const relPath = cwd.startsWith(browseRoot)
     ? cwd.slice(browseRoot.length).replace(/^\//, "")
     : "";
@@ -56,26 +56,32 @@ export function FolderPicker({ token, cwd, browseRoot, onCwdChange, onStartSessi
   if (!browseRoot) return null;
 
   return (
-    <div className="folder-picker">
-      <div className="folder-picker-header">
+    <div className="border-b border-border">
+      <div className="flex items-center">
         <button
-          className="folder-picker-toggle"
+          className="flex-1 min-w-0 flex items-center gap-2 w-full px-3 py-2.5 bg-transparent border-none text-foreground text-[0.8125rem] cursor-pointer text-left hover:bg-accent"
           onClick={() => setOpen(!open)}
           type="button"
         >
-          <span className="folder-icon">{open ? "\u25BE" : "\u25B8"}</span>
-          <span className="folder-breadcrumb">
+          <span className="shrink-0 text-[0.625rem] text-muted-foreground">{open ? "\u25BE" : "\u25B8"}</span>
+          <span className="flex items-center flex-wrap gap-0 min-w-0 overflow-hidden">
             <span
-              className="breadcrumb-segment clickable"
+              className={cn(
+                "cursor-pointer font-mono text-xs hover:text-primary hover:underline",
+                segments.length === 0 ? "text-foreground" : "text-muted-foreground"
+              )}
               onClick={(e) => { e.stopPropagation(); navigateTo(""); }}
             >
               {rootName}
             </span>
             {segments.map((seg, i) => (
               <span key={i}>
-                <span className="breadcrumb-sep">/</span>
+                <span className="text-muted-foreground mx-1 text-xs">/</span>
                 <span
-                  className="breadcrumb-segment clickable"
+                  className={cn(
+                    "cursor-pointer font-mono text-xs hover:text-primary hover:underline",
+                    i === segments.length - 1 ? "text-foreground" : "text-muted-foreground"
+                  )}
                   onClick={(e) => {
                     e.stopPropagation();
                     navigateTo(segments.slice(0, i + 1).join("/"));
@@ -87,40 +93,48 @@ export function FolderPicker({ token, cwd, browseRoot, onCwdChange, onStartSessi
             ))}
           </span>
         </button>
-        <button
-          className="folder-picker-start"
-          onClick={() => onStartSession(cwd)}
-          type="button"
-          title="Start session here"
-        >
-          &#9654;
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="shrink-0 bg-transparent border-none text-muted-foreground text-[0.625rem] cursor-pointer px-2.5 py-1.5 leading-none hover:text-emerald-400"
+              onClick={() => onStartSession(cwd)}
+              type="button"
+            >
+              &#9654;
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Start session here</TooltipContent>
+        </Tooltip>
       </div>
       {open && (
-        <div className="folder-picker-list">
-          {loading && <div className="folder-picker-loading">Loading...</div>}
+        <div className="max-h-[200px] overflow-y-auto border-t border-border">
+          {loading && <div className="px-3 py-2 text-xs text-muted-foreground">Loading...</div>}
           {!loading && dirs.length === 0 && (
-            <div className="folder-picker-empty">No subdirectories</div>
+            <div className="px-3 py-2 text-xs text-muted-foreground">No subdirectories</div>
           )}
           {!loading && dirs.map((dir) => {
             const dirCwd = relPath ? `${browseRoot}/${relPath}/${dir}` : `${browseRoot}/${dir}`;
             return (
-              <div key={dir} className="folder-picker-item-row">
+              <div key={dir} className="flex items-center">
                 <button
-                  className="folder-picker-item"
+                  className="flex-1 min-w-0 block w-full px-3 py-1.5 pl-6 bg-transparent border-none text-foreground text-[0.8125rem] font-mono cursor-pointer text-left hover:bg-accent hover:text-primary"
                   onClick={() => navigateTo(relPath ? `${relPath}/${dir}` : dir)}
                   type="button"
                 >
                   {dir}
                 </button>
-                <button
-                  className="folder-picker-start"
-                  onClick={() => onStartSession(dirCwd)}
-                  type="button"
-                  title="Start session in this folder"
-                >
-                  &#9654;
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="shrink-0 bg-transparent border-none text-muted-foreground text-[0.625rem] cursor-pointer px-2.5 py-1.5 leading-none hover:text-emerald-400"
+                      onClick={() => onStartSession(dirCwd)}
+                      type="button"
+                    >
+                      &#9654;
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Start session in this folder</TooltipContent>
+                </Tooltip>
               </div>
             );
           })}

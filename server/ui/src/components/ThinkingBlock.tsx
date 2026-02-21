@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 const THINKING_LABELS = [
   "Thought for",
@@ -36,21 +37,23 @@ export function ThinkingBlock({ text, durationMs }: Props) {
   const labelText = duration != null ? `${label} ${duration}` : label;
 
   return (
-    <div className="thinking-block">
+    <div className="self-start max-w-[90%] md:max-w-[70%]">
       <button
-        className="thinking-header"
+        className="flex items-center gap-2 bg-transparent border-none text-muted-foreground text-[0.8125rem] cursor-pointer py-1.5 px-0 transition-colors duration-200 hover:text-foreground"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
         aria-label={`${labelText} - click to ${expanded ? "collapse" : "expand"} thinking details`}
       >
-        <span className="thinking-dot done" />
-        <span className="thinking-label">{labelText}</span>
-        <span className={`thinking-chevron ${expanded ? "expanded" : ""}`} aria-hidden="true">
+        <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-muted-foreground" />
+        <span className="whitespace-nowrap">{labelText}</span>
+        <span className={cn("text-[0.625rem] transition-transform duration-200 ml-auto", expanded && "rotate-90")} aria-hidden="true">
           &#9656;
         </span>
       </button>
       {expanded && (
-        <pre className="thinking-content">{text}</pre>
+        <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground border-l-2 border-border pl-3 py-2 ml-[3px] my-1 max-h-[300px] overflow-y-auto">
+          {text}
+        </pre>
       )}
     </div>
   );
