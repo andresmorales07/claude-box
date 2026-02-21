@@ -22,13 +22,18 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: server/package-lock.json
+          cache-dependency-path: |
+            server/package-lock.json
+            server/ui/package-lock.json
 
       - name: Install dependencies
         run: cd server && npm ci
 
       - name: Run integration tests
         run: cd server && npm test
+
+      - name: Build UI
+        run: cd server && npm run build:ui
 
   build:
     runs-on: ubuntu-latest

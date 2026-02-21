@@ -16,9 +16,9 @@ test('authenticates with correct password', async ({ page }) => {
   await passwordInput.fill(process.env.API_PASSWORD || 'changeme');
   await page.locator('button[type="submit"]').click();
 
-  // After login, should see the session list (or empty state)
+  // After login, should see the main app (session list sidebar or empty state prompt)
   await expect(
-    page.locator('.session-list-container, .empty-state').first()
+    page.getByText('Create a new session to get started')
   ).toBeVisible({ timeout: 10000 });
 });
 
@@ -31,6 +31,6 @@ test('rejects incorrect password', async ({ page }) => {
   await page.locator('button[type="submit"]').click();
 
   // Should show error and stay on login page
-  await expect(page.locator('.error')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('Invalid password')).toBeVisible({ timeout: 5000 });
   await expect(passwordInput).toBeVisible();
 });
