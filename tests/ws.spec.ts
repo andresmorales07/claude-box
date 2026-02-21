@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import WebSocket from 'ws';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:8080';
+const API_PORT = process.env.API_PORT || '8080';
+const BASE_URL = process.env.BASE_URL || `http://localhost:${API_PORT}`;
 const API_PASSWORD = process.env.API_PASSWORD || 'changeme';
 
 function wsUrl(sessionId: string): string {
