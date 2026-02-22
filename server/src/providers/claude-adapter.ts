@@ -68,17 +68,45 @@ function normalizeAssistant(msg: SDKAssistantMessage, index: number, accumulated
   return { role: "assistant", parts, index };
 }
 
+/**
+ * Clean SDK-internal XML markup from user message text.
+ * NOTE: Keep in sync with server/ui/src/components/MessageBubble.tsx cleanSdkMarkup().
+ * Handles:
+ *  - <command-name>/<cmd></command-name> ... → "/cmd args"
+ *  - <local-command-caveat>...</local-command-caveat> → stripped entirely
+ *  - <local-command-stdout>...</local-command-stdout> → unwrapped to plain text
+ */
+function cleanSdkMarkup(text: string): string {
+  // Strip <local-command-caveat>...</local-command-caveat> blocks (LLM-only instructions)
+  let cleaned = text.replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, "");
+
+  // Unwrap <local-command-stdout>...</local-command-stdout> to plain text
+  cleaned = cleaned.replace(/<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/g, "$1");
+
+  // Convert <command-name>/<cmd></command-name> ... to clean "/cmd args"
+  const m = cleaned.match(
+    /^\s*<command-name>(\/[^<]+)<\/command-name>\s*<command-message>[\s\S]*?<\/command-message>\s*(?:<command-args>([\s\S]*?)<\/command-args>)?/,
+  );
+  if (m) {
+    const name = m[1].trim();
+    const args = m[2]?.trim();
+    cleaned = args ? `${name} ${args}` : name;
+  }
+
+  return cleaned.trim();
+}
+
 function normalizeUser(msg: SDKUserMessage | SDKUserMessageReplay, index: number): NormalizedMessage | null {
   const inner = msg.message;
   if (!inner) return null;
 
   const parts: MessagePart[] = [];
   if (typeof inner.content === "string") {
-    if (inner.content) parts.push({ type: "text", text: inner.content });
+    if (inner.content) parts.push({ type: "text", text: cleanSdkMarkup(inner.content) });
   } else if (Array.isArray(inner.content)) {
     for (const block of inner.content as ContentBlock[]) {
       if (block.type === "text" && block.text) {
-        parts.push({ type: "text", text: block.text });
+        parts.push({ type: "text", text: cleanSdkMarkup(block.text) });
       } else if (block.type === "tool_result") {
         const resultBlock = block as unknown as {
           type: string;
