@@ -138,7 +138,7 @@ describe("SessionWatcher", () => {
       watcher.stop();
     });
 
-    it("sends error when file path is not found", async () => {
+    it("sends replay_complete when file path is not found", async () => {
       const fileMap = new Map<string, string>();
       const adapter = createMockAdapter(fileMap);
       const watcher = new SessionWatcher(adapter);
@@ -148,8 +148,7 @@ describe("SessionWatcher", () => {
 
       expect(sent).toHaveLength(1);
       const parsed = JSON.parse(sent[0]);
-      expect(parsed.type).toBe("error");
-      expect(parsed.message).toContain("nonexistent");
+      expect(parsed.type).toBe("replay_complete");
 
       watcher.stop();
     });

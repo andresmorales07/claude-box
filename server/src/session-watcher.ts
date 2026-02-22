@@ -5,7 +5,7 @@ import type { ServerMessage } from "./types.js";
 
 /** Internal tracking state for a single watched session. */
 interface WatchedSession {
-  filePath: string;
+  filePath: string | null;
   byteOffset: number;
   lineBuffer: string;
   messageIndex: number;
@@ -49,7 +49,17 @@ export class SessionWatcher {
     // Resolve file path via adapter
     const filePath = await this.adapter.getSessionFilePath(sessionId);
     if (!filePath) {
-      this.send(client, { type: "error", message: `Session file not found for ${sessionId}` });
+      // No file (e.g., test adapter) — create a client-only watch entry
+      // so broadcastToSubscribers() can deliver live messages.
+      watched = {
+        filePath: null,
+        byteOffset: 0,
+        lineBuffer: "",
+        messageIndex: 0,
+        clients: new Set([client]),
+      };
+      this.sessions.set(sessionId, watched);
+      this.send(client, { type: "replay_complete" });
       return;
     }
 
@@ -109,6 +119,12 @@ export class SessionWatcher {
    * so they get a full replay without interfering with the shared state.
    */
   private async replayToClient(watched: WatchedSession, client: WebSocket): Promise<void> {
+    // No file to replay (e.g., test adapter) — just signal replay is done
+    if (!watched.filePath) {
+      this.send(client, { type: "replay_complete" });
+      return;
+    }
+
     let content: string;
     try {
       content = await readFile(watched.filePath, "utf-8");
@@ -184,6 +200,9 @@ export class SessionWatcher {
 
   /** Poll a single session for new data. */
   private async pollSession(_sessionId: string, watched: WatchedSession): Promise<void> {
+    // No file to poll (e.g., test adapter) — live messages come via broadcastToSubscribers()
+    if (!watched.filePath) return;
+
     let fileSize: number;
     try {
       const fileStat = await stat(watched.filePath);

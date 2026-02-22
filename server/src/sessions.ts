@@ -235,8 +235,9 @@ async function runSession(
         broadcastToSession(session.sessionId, { type: "slash_commands", commands: result.value.event.slashCommands });
         continue;
       }
-      // All other messages: no-op here. The SessionWatcher tails the JSONL
-      // file and broadcasts { type: "message" } events to subscribers.
+      // Broadcast the message directly for live WebSocket clients.
+      // The watcher handles replay for late-connecting clients.
+      broadcastToSession(session.sessionId, { type: "message", message: result.value });
     }
 
     const sessionResult = result.value;
@@ -287,6 +288,13 @@ export function interruptSession(id: string): boolean {
   session.abortController.abort();
   broadcastToSession(session.sessionId, { type: "status", status: "interrupted" });
   return true;
+}
+
+export function clearSessions(): void {
+  for (const s of sessions.values()) {
+    s.abortController.abort();
+  }
+  sessions.clear();
 }
 
 export function deleteSession(id: string): boolean {

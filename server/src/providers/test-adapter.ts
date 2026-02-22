@@ -293,7 +293,6 @@ export class TestAdapter implements ProviderAdapter {
     }
 
     return {
-      providerSessionId: randomUUID(),
       totalCostUsd: 0.001,
       numTurns: Math.max(1, index),
     };
