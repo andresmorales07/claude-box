@@ -222,4 +222,51 @@ export class ClaudeAdapter {
         }
         return { providerSessionId, totalCostUsd, numTurns };
     }
+    async getSessionHistory(sessionId) {
+        const { findSessionFile } = await import("../session-history.js");
+        const filePath = await findSessionFile(sessionId);
+        if (!filePath)
+            return [];
+        const { createReadStream } = await import("node:fs");
+        const { createInterface } = await import("node:readline");
+        const stream = createReadStream(filePath, { encoding: "utf-8" });
+        const rl = createInterface({ input: stream, crlfDelay: Infinity });
+        const messages = [];
+        let messageIndex = 0;
+        try {
+            for await (const line of rl) {
+                if (!line.trim())
+                    continue;
+                let parsed;
+                try {
+                    parsed = JSON.parse(line);
+                }
+                catch {
+                    continue;
+                }
+                const type = parsed.type;
+                if (type !== "user" && type !== "assistant")
+                    continue;
+                const msg = parsed.message;
+                if (!msg)
+                    continue;
+                let normalized = null;
+                if (type === "assistant") {
+                    normalized = normalizeAssistant({ type: "assistant", message: msg }, messageIndex);
+                }
+                else if (type === "user") {
+                    normalized = normalizeUser({ type: "user", message: msg }, messageIndex);
+                }
+                if (normalized) {
+                    messages.push(normalized);
+                    messageIndex++;
+                }
+            }
+        }
+        finally {
+            rl.close();
+            stream.destroy();
+        }
+        return messages;
+    }
 }
