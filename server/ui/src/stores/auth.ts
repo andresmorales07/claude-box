@@ -8,9 +8,11 @@ interface AuthState {
   logout: () => void;
 }
 
+const storedToken = localStorage.getItem("api_token") ?? "";
+
 export const useAuthStore = create<AuthState>((set) => ({
-  token: localStorage.getItem("api_token") ?? "",
-  authenticated: false,
+  token: storedToken,
+  authenticated: storedToken.length > 0,
   setToken: (token) => set({ token }),
   login: () => {
     const token = useAuthStore.getState().token;

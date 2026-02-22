@@ -47,6 +47,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     const { token } = useAuthStore.getState();
     try {
       const res = await fetch("/api/config", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) { useAuthStore.getState().logout(); return; }
       if (!res.ok) return;
       const config = await res.json();
       if (config?.browseRoot) {
