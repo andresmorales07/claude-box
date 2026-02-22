@@ -170,15 +170,5 @@ export function MessageBubble({ message, thinkingDurationMs, toolResults }: Prop
     );
   }
 
-  if (message.role === "system" && message.event.type === "session_result") {
-    return (
-      <div className="flex justify-center">
-        <div className="text-xs text-muted-foreground bg-card/50 border border-border rounded-full px-4 py-1.5">
-          Session completed · ${message.event.totalCostUsd.toFixed(4)} · {message.event.numTurns} turns
-        </div>
-      </div>
-    );
-  }
-
   return null;
 }
