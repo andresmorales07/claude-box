@@ -64,7 +64,7 @@ export function ChatPage() {
 
   const isThinkingActive = thinkingText.length > 0 && thinkingStartTime != null;
   const isRunning = status === "running" || status === "starting";
-  const sessionName = activeSession?.slug || activeSession?.summary || id?.slice(0, 8) || "Chat";
+  const sessionName = activeSession?.summary || activeSession?.slug || id?.slice(0, 8) || "Chat";
   const visibleError = lastError && lastError !== dismissedError ? lastError : null;
 
   return (
