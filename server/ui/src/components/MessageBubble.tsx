@@ -3,6 +3,7 @@ import type { NormalizedMessage, MessagePart, TextPart, ToolResultPart } from ".
 import { ThinkingBlock } from "./ThinkingBlock";
 import { Markdown } from "./Markdown";
 import { cn } from "@/lib/utils";
+import { getToolSummary } from "@/lib/tools";
 import { ChevronDown, Wrench, AlertCircle } from "lucide-react";
 
 /** Clean SDK-internal XML markup that may appear in user messages (defense in depth).
@@ -33,42 +34,6 @@ interface Props {
   toolResults: Map<string, ToolResultPart>;
 }
 
-/** Extract a human-readable one-liner from tool input based on tool name. */
-function getToolSummary(toolName: string, input: unknown): string {
-  if (input == null || typeof input !== "object") return "";
-  const obj = input as Record<string, unknown>;
-
-  // Known tool patterns
-  const pathTools = ["Read", "Write", "Edit", "NotebookEdit"];
-  if (pathTools.some((t) => toolName.includes(t)) && typeof obj.file_path === "string") {
-    return obj.file_path;
-  }
-  if (toolName.includes("Bash") && typeof obj.command === "string") {
-    const cmd = obj.command;
-    return cmd.length > 80 ? cmd.slice(0, 77) + "..." : cmd;
-  }
-  if ((toolName.includes("Glob") || toolName.includes("Grep")) && typeof obj.pattern === "string") {
-    return obj.pattern;
-  }
-  if (toolName.includes("WebFetch") && typeof obj.url === "string") {
-    return obj.url;
-  }
-  if (toolName.includes("Task") && typeof obj.description === "string") {
-    return obj.description;
-  }
-  if (toolName.includes("WebSearch") && typeof obj.query === "string") {
-    return obj.query;
-  }
-
-  // Fallback: first string value
-  for (const val of Object.values(obj)) {
-    if (typeof val === "string" && val.length > 0) {
-      return val.length > 80 ? val.slice(0, 77) + "..." : val;
-    }
-  }
-  return "";
-}
-
 function ToolCard({
   toolUse,
   toolResult,
@@ -88,6 +53,7 @@ function ToolCard({
       <button
         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-accent/30 transition-colors"
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
       >
         <Wrench className="size-3.5 text-amber-400 shrink-0" />
         <span className="font-medium text-amber-400 shrink-0">{toolUse.toolName}</span>
@@ -150,7 +116,6 @@ function renderPart(
   i: number,
   thinkingDurationMs: number | null,
   toolResults: Map<string, ToolResultPart>,
-  allParts: MessagePart[],
 ) {
   switch (part.type) {
     case "text":
@@ -218,7 +183,7 @@ export function MessageBubble({ message, thinkingDurationMs, toolResults }: Prop
   if (message.role === "assistant") {
     return (
       <div className="flex flex-col gap-2 max-w-[85%] md:max-w-[70%]">
-        {message.parts.map((part, i) => renderPart(part, i, thinkingDurationMs, toolResults, message.parts))}
+        {message.parts.map((part, i) => renderPart(part, i, thinkingDurationMs, toolResults))}
       </div>
     );
   }
