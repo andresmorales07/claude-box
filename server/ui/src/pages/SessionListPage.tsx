@@ -3,19 +3,20 @@ import { useNavigate } from "react-router-dom";
 import { useSessionsStore } from "@/stores/sessions";
 import { groupByDate } from "@/lib/sessions";
 import { SessionCard } from "@/components/SessionCard";
+import { WorkspaceFilter } from "@/components/WorkspaceFilter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus, Search } from "lucide-react";
 
 export function SessionListPage() {
-  const { sessions, activeSessionId, searchQuery, setActiveSession, setSearchQuery, fetchSessions } = useSessionsStore();
+  const { sessions, activeSessionId, searchQuery, setActiveSession, setSearchQuery, fetchSessions, workspaceFilter } = useSessionsStore();
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchSessions();
     const interval = setInterval(fetchSessions, 5000);
     return () => clearInterval(interval);
-  }, [fetchSessions]);
+  }, [fetchSessions, workspaceFilter]);
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return sessions;
@@ -47,6 +48,7 @@ export function SessionListPage() {
           <Plus className="size-5" />
         </Button>
       </header>
+      <WorkspaceFilter />
       <div className="px-4 py-2">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useSessionsStore } from "@/stores/sessions";
 import { groupByDate } from "@/lib/sessions";
 import { SessionCard } from "./SessionCard";
-import { FolderPicker } from "./FolderPicker";
+import { WorkspaceFilter } from "./WorkspaceFilter";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,14 +15,14 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
-  const { sessions, activeSessionId, searchQuery, setActiveSession, setSearchQuery, fetchSessions, cwd, browseRoot, setCwd } = useSessionsStore();
+  const { sessions, activeSessionId, searchQuery, setActiveSession, setSearchQuery, fetchSessions, workspaceFilter } = useSessionsStore();
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchSessions();
     const interval = setInterval(fetchSessions, 5000);
     return () => clearInterval(interval);
-  }, [fetchSessions]);
+  }, [fetchSessions, workspaceFilter]);
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return sessions;
@@ -66,7 +66,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           <PanelLeftClose className="size-4" />
         </Button>
       </div>
-      <FolderPicker cwd={cwd} browseRoot={browseRoot} onCwdChange={setCwd} />
+      <WorkspaceFilter />
       <div className="px-3 py-2">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
