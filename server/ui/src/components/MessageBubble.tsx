@@ -1,20 +1,30 @@
 import { useState } from "react";
-import type { NormalizedMessage, MessagePart } from "../types";
+import type { NormalizedMessage, MessagePart, TextPart } from "../types";
 import { ThinkingBlock } from "./ThinkingBlock";
 import { Markdown } from "./Markdown";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Wrench, AlertCircle } from "lucide-react";
 
-/** Clean SDK-internal XML markup that may appear in user messages (defense in depth). */
+/** Clean SDK-internal XML markup that may appear in user messages (defense in depth).
+ *  NOTE: Keep in sync with server/src/providers/claude-adapter.ts cleanSdkMarkup(). */
 function cleanSdkMarkup(text: string): string {
-  return text
-    .replace(/<local-command-caveat>[^<]*<\/local-command-caveat>/g, "")
-    .replace(/<local-command-stdout>([^<]*)<\/local-command-stdout>/g, "$1")
-    .replace(
-      /^<command-name>(\/[^<]+)<\/command-name>\s*<command-message>[^<]*<\/command-message>\s*(?:<command-args>([^<]*)<\/command-args>)?/,
-      (_, name: string, args?: string) => (args?.trim() ? `${name.trim()} ${args.trim()}` : name.trim()),
-    )
-    .trim();
+  // Strip <local-command-caveat>...</local-command-caveat> blocks (LLM-only instructions)
+  let cleaned = text.replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, "");
+
+  // Unwrap <local-command-stdout>...</local-command-stdout> to plain text
+  cleaned = cleaned.replace(/<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/g, "$1");
+
+  // Convert <command-name>/<cmd></command-name> ... to clean "/cmd args"
+  const m = cleaned.match(
+    /^\s*<command-name>(\/[^<]+)<\/command-name>\s*<command-message>[\s\S]*?<\/command-message>\s*(?:<command-args>([\s\S]*?)<\/command-args>)?/,
+  );
+  if (m) {
+    const name = m[1].trim();
+    const args = m[2]?.trim();
+    cleaned = args ? `${name} ${args}` : name;
+  }
+
+  return cleaned.trim();
 }
 
 interface Props {
@@ -78,23 +88,27 @@ export function MessageBubble({ message, thinkingDurationMs }: Props) {
   if (message.role === "user") {
     const text = cleanSdkMarkup(
       message.parts
-        .filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .filter((p): p is TextPart => p.type === "text")
         .map((p) => p.text)
         .join(""),
     );
     if (!text) return null;
-    const isCommand = text.startsWith("/");
-    return (
-      <div className="flex justify-end">
-        {isCommand ? (
+
+    if (text.startsWith("/")) {
+      return (
+        <div className="flex justify-end">
           <div className="px-3 py-1.5 rounded-full bg-secondary/60 border border-border text-xs font-mono text-muted-foreground">
             {text}
           </div>
-        ) : (
-          <div className="px-4 py-2.5 rounded-2xl rounded-br-md bg-secondary text-sm max-w-[85%] md:max-w-[70%] break-words">
-            {text}
-          </div>
-        )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex justify-end">
+        <div className="px-4 py-2.5 rounded-2xl rounded-br-md bg-secondary text-sm max-w-[85%] md:max-w-[70%] break-words">
+          {text}
+        </div>
       </div>
     );
   }

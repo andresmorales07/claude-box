@@ -40,6 +40,7 @@ function normalizeAssistant(msg, index, accumulatedThinking = "") {
 }
 /**
  * Clean SDK-internal XML markup from user message text.
+ * NOTE: Keep in sync with server/ui/src/components/MessageBubble.tsx cleanSdkMarkup().
  * Handles:
  *  - <command-name>/<cmd></command-name> ... → "/cmd args"
  *  - <local-command-caveat>...</local-command-caveat> → stripped entirely
@@ -47,11 +48,11 @@ function normalizeAssistant(msg, index, accumulatedThinking = "") {
  */
 function cleanSdkMarkup(text) {
     // Strip <local-command-caveat>...</local-command-caveat> blocks (LLM-only instructions)
-    let cleaned = text.replace(/<local-command-caveat>[^<]*<\/local-command-caveat>/g, "");
+    let cleaned = text.replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, "");
     // Unwrap <local-command-stdout>...</local-command-stdout> to plain text
-    cleaned = cleaned.replace(/<local-command-stdout>([^<]*)<\/local-command-stdout>/g, "$1");
+    cleaned = cleaned.replace(/<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/g, "$1");
     // Convert <command-name>/<cmd></command-name> ... to clean "/cmd args"
-    const m = cleaned.match(/^<command-name>(\/[^<]+)<\/command-name>\s*<command-message>[^<]*<\/command-message>\s*(?:<command-args>([^<]*)<\/command-args>)?/);
+    const m = cleaned.match(/^\s*<command-name>(\/[^<]+)<\/command-name>\s*<command-message>[\s\S]*?<\/command-message>\s*(?:<command-args>([\s\S]*?)<\/command-args>)?/);
     if (m) {
         const name = m[1].trim();
         const args = m[2]?.trim();
