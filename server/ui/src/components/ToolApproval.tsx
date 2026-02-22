@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Shield } from "lucide-react";
 
 interface Props {
   toolName: string; toolUseId: string; input: unknown;
@@ -93,7 +94,7 @@ function AskUserQuestionUI({ questions, toolUseId, onApprove, onDeny }: {
   };
 
   return (
-    <div className="p-4 mx-4 my-2 bg-card border-2 border-primary rounded-lg">
+    <div className="p-4 mx-4 my-2 bg-card border border-border shadow-lg rounded-xl">
       {questions.map((q, i) => (
         <div key={i} className={cn("mb-4", i === questions.length - 1 && "mb-3")}>
           {q.header && (
@@ -139,8 +140,8 @@ function AskUserQuestionUI({ questions, toolUseId, onApprove, onDeny }: {
         </div>
       ))}
       <div className="flex gap-2">
-        <Button size="sm" onClick={handleSubmit} disabled={!allAnswered} className="bg-emerald-500 text-black hover:bg-emerald-400">Submit</Button>
-        <Button size="sm" variant="destructive" onClick={() => onDeny(toolUseId)}>Dismiss</Button>
+        <Button size="sm" onClick={handleSubmit} disabled={!allAnswered} className="h-10 bg-emerald-500 text-black hover:bg-emerald-400">Submit</Button>
+        <Button size="sm" variant="destructive" onClick={() => onDeny(toolUseId)} className="h-10">Dismiss</Button>
       </div>
     </div>
   );
@@ -152,15 +153,15 @@ export function ToolApproval({ toolName, toolUseId, input, onApprove, onApproveA
   }
 
   return (
-    <div className="p-4 mx-4 my-2 bg-card border-2 border-amber-400 rounded-lg">
-      <div className="font-semibold text-amber-400 mb-2">Tool: {toolName}</div>
+    <div className="p-4 mx-4 my-2 bg-card border border-border shadow-lg rounded-xl">
+      <div className="font-semibold text-amber-400 mb-2 flex items-center gap-2"><Shield className="size-4" />Tool: {toolName}</div>
       <div className="font-mono text-xs text-muted-foreground whitespace-pre-wrap max-h-[200px] overflow-y-auto mb-3">
         {JSON.stringify(input, null, 2)}
       </div>
       <div className="flex gap-2">
-        <Button size="sm" onClick={() => onApprove(toolUseId)} className="bg-emerald-500 text-black hover:bg-emerald-400">Approve</Button>
-        <Button size="sm" onClick={() => onApproveAlways(toolUseId)} className="bg-amber-400 text-black hover:bg-amber-300">Always Allow</Button>
-        <Button size="sm" variant="destructive" onClick={() => onDeny(toolUseId)}>Deny</Button>
+        <Button size="sm" onClick={() => onApprove(toolUseId)} className="h-10 bg-emerald-500 text-black hover:bg-emerald-400">Approve</Button>
+        <Button size="sm" onClick={() => onApproveAlways(toolUseId)} className="h-10 bg-amber-400 text-black hover:bg-amber-300">Always Allow</Button>
+        <Button size="sm" variant="destructive" onClick={() => onDeny(toolUseId)} className="h-10">Deny</Button>
       </div>
     </div>
   );
