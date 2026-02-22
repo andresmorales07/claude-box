@@ -5,6 +5,18 @@ import { Markdown } from "./Markdown";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Wrench, AlertCircle } from "lucide-react";
 
+/** Clean SDK-internal XML markup that may appear in user messages (defense in depth). */
+function cleanSdkMarkup(text: string): string {
+  return text
+    .replace(/<local-command-caveat>[^<]*<\/local-command-caveat>/g, "")
+    .replace(/<local-command-stdout>([^<]*)<\/local-command-stdout>/g, "$1")
+    .replace(
+      /^<command-name>(\/[^<]+)<\/command-name>\s*<command-message>[^<]*<\/command-message>\s*(?:<command-args>([^<]*)<\/command-args>)?/,
+      (_, name: string, args?: string) => (args?.trim() ? `${name.trim()} ${args.trim()}` : name.trim()),
+    )
+    .trim();
+}
+
 interface Props {
   message: NormalizedMessage;
   thinkingDurationMs: number | null;
@@ -64,16 +76,25 @@ function renderPart(part: MessagePart, i: number, thinkingDurationMs: number | n
 
 export function MessageBubble({ message, thinkingDurationMs }: Props) {
   if (message.role === "user") {
-    const text = message.parts
-      .filter((p): p is { type: "text"; text: string } => p.type === "text")
-      .map((p) => p.text)
-      .join("");
+    const text = cleanSdkMarkup(
+      message.parts
+        .filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map((p) => p.text)
+        .join(""),
+    );
     if (!text) return null;
+    const isCommand = text.startsWith("/");
     return (
       <div className="flex justify-end">
-        <div className="px-4 py-2.5 rounded-2xl rounded-br-md bg-secondary text-sm max-w-[85%] md:max-w-[70%] break-words">
-          {text}
-        </div>
+        {isCommand ? (
+          <div className="px-3 py-1.5 rounded-full bg-secondary/60 border border-border text-xs font-mono text-muted-foreground">
+            {text}
+          </div>
+        ) : (
+          <div className="px-4 py-2.5 rounded-2xl rounded-br-md bg-secondary text-sm max-w-[85%] md:max-w-[70%] break-words">
+            {text}
+          </div>
+        )}
       </div>
     );
   }
