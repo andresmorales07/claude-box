@@ -282,4 +282,61 @@ export class ClaudeAdapter implements ProviderAdapter {
 
     return { providerSessionId, totalCostUsd, numTurns };
   }
+
+  async getSessionHistory(sessionId: string): Promise<NormalizedMessage[]> {
+    const { findSessionFile } = await import("../session-history.js");
+    const filePath = await findSessionFile(sessionId);
+    if (!filePath) return [];
+
+    const { createReadStream } = await import("node:fs");
+    const { createInterface } = await import("node:readline");
+
+    const stream = createReadStream(filePath, { encoding: "utf-8" });
+    const rl = createInterface({ input: stream, crlfDelay: Infinity });
+
+    const messages: NormalizedMessage[] = [];
+    let messageIndex = 0;
+
+    try {
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+
+        let parsed: Record<string, unknown>;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          continue;
+        }
+
+        const type = parsed.type;
+        if (type !== "user" && type !== "assistant") continue;
+
+        const msg = parsed.message as Record<string, unknown> | undefined;
+        if (!msg) continue;
+
+        let normalized: NormalizedMessage | null = null;
+        if (type === "assistant") {
+          normalized = normalizeAssistant(
+            { type: "assistant", message: msg } as unknown as SDKAssistantMessage,
+            messageIndex,
+          );
+        } else if (type === "user") {
+          normalized = normalizeUser(
+            { type: "user", message: msg } as unknown as SDKUserMessage,
+            messageIndex,
+          );
+        }
+
+        if (normalized) {
+          messages.push(normalized);
+          messageIndex++;
+        }
+      }
+    } finally {
+      rl.close();
+      stream.destroy();
+    }
+
+    return messages;
+  }
 }
