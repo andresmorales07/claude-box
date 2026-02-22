@@ -1,18 +1,11 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-
-interface SessionSummary {
-  id: string;
-  status: string;
-  createdAt: string;
-  lastModified: string;
-  numTurns: number;
-  totalCostUsd: number;
-  hasPendingApproval: boolean;
-  provider: string;
-  slug: string | null;
-  summary: string | null;
-}
+import { Button } from "@/components/ui/button";
+import type { SessionSummary } from "@/stores/sessions";
+import { useSessionsStore } from "@/stores/sessions";
+import { useSwipe } from "@/hooks/useSwipe";
+import { useIsDesktop } from "@/hooks/useMediaQuery";
 
 interface Props {
   session: SessionSummary;
@@ -48,7 +41,35 @@ function sessionDisplayName(s: SessionSummary): string {
 }
 
 export function SessionCard({ session, isActive, onClick }: Props) {
-  return (
+  const isDesktop = useIsDesktop();
+  const [offsetX, setOffsetX] = useState(0);
+  const [confirming, setConfirming] = useState(false);
+
+  const swipe = useSwipe({
+    threshold: 80,
+    onSwipeLeft: () => { setOffsetX(0); setConfirming(true); },
+    onProgress: (dx) => { if (dx < 0) setOffsetX(dx); },
+    onCancel: () => setOffsetX(0),
+  });
+
+  const handleDelete = async () => {
+    setConfirming(false);
+    await useSessionsStore.getState().deleteSession(session.id);
+  };
+
+  if (confirming) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-3 bg-destructive/10 border-l-2 border-l-destructive">
+        <span className="flex-1 text-sm text-destructive">Delete this session?</span>
+        <Button size="sm" variant="destructive" onClick={handleDelete} className="h-7 text-xs">Delete</Button>
+        <Button size="sm" variant="ghost" onClick={() => setConfirming(false)} className="h-7 text-xs">Cancel</Button>
+      </div>
+    );
+  }
+
+  const deleteHintOpacity = Math.min(Math.abs(offsetX) / 80, 1);
+
+  const cardContent = (
     <button
       className={cn(
         "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
@@ -69,5 +90,27 @@ export function SessionCard({ session, isActive, onClick }: Props) {
         <Badge variant="destructive" className="text-[0.625rem] px-1.5 py-0 shrink-0">!</Badge>
       )}
     </button>
+  );
+
+  if (isDesktop) return cardContent;
+
+  return (
+    <div className="relative overflow-hidden">
+      {/* Red delete hint revealed on swipe left */}
+      <div
+        className="absolute inset-0 bg-destructive/20 flex items-center justify-end pr-4"
+        style={{ opacity: offsetX < -10 ? deleteHintOpacity : 0 }}
+        aria-hidden
+      >
+        <span className="text-destructive text-sm font-semibold">Delete</span>
+      </div>
+      <div
+        {...swipe}
+        style={{ transform: `translateX(${offsetX}px)`, transition: offsetX === 0 ? "transform 0.2s ease" : "none" }}
+        className="touch-pan-y"
+      >
+        {cardContent}
+      </div>
+    </div>
   );
 }

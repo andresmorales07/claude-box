@@ -27,10 +27,11 @@ interface MessagesState {
   thinkingText: string;
   thinkingStartTime: number | null;
   thinkingDurations: Record<number, number>;
+  lastError: string | null;
 
   connect: (sessionId: string) => void;
   disconnect: () => void;
-  sendPrompt: (text: string) => void;
+  sendPrompt: (text: string) => boolean;
   approve: (toolUseId: string, answers?: Record<string, string>) => void;
   approveAlways: (toolUseId: string) => void;
   deny: (toolUseId: string, message?: string) => void;
@@ -47,8 +48,12 @@ let thinkingStart: number | null = null;
 let messageCount = 0;
 let currentSessionId: string | null = null;
 
-function send(msg: unknown) {
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+function send(msg: unknown): boolean {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(msg));
+    return true;
+  }
+  return false;
 }
 
 export const useMessagesStore = create<MessagesState>((set, get) => ({
@@ -60,6 +65,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   thinkingText: "",
   thinkingStartTime: null,
   thinkingDurations: {},
+  lastError: null,
 
   connect: (sessionId: string) => {
     get().disconnect();
@@ -75,23 +81,27 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
       thinkingText: "",
       thinkingStartTime: null,
       thinkingDurations: {},
+      lastError: null,
     });
 
     const doConnect = () => {
       if (currentSessionId !== sessionId) return;
-      const { token } = useAuthStore.getState();
       const protocol = location.protocol === "https:" ? "wss:" : "ws:";
       const socket = new WebSocket(`${protocol}//${location.host}/api/sessions/${sessionId}/stream`);
 
       socket.onopen = () => {
+        const { token } = useAuthStore.getState();
         socket.send(JSON.stringify({ type: "auth", token }));
-        set({ connected: true });
+        set({ connected: true, lastError: null });
         reconnectAttempts = 0;
       };
 
       socket.onmessage = (event) => {
         let msg: ServerMessage;
-        try { msg = JSON.parse(event.data); } catch { return; }
+        try { msg = JSON.parse(event.data); } catch (err) {
+          console.error("Failed to parse WebSocket message:", err);
+          return;
+        }
 
         switch (msg.type) {
           case "message": {
@@ -129,20 +139,27 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
             break;
           case "error":
             console.error("Server error:", msg.message);
+            set({ lastError: msg.message });
             break;
         }
       };
 
       socket.onclose = () => {
+        ws = null;
         set({ connected: false });
         if (currentSessionId === sessionId && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           const delay = BASE_RECONNECT_MS * Math.pow(2, reconnectAttempts);
           reconnectAttempts++;
           reconnectTimer = setTimeout(doConnect, delay);
+        } else if (currentSessionId === sessionId) {
+          set({ status: "disconnected", lastError: "Connection lost — reload to reconnect" });
         }
       };
 
-      socket.onerror = () => socket.close();
+      socket.onerror = (ev) => {
+        console.error("WebSocket error:", ev);
+        socket.close();
+      };
       ws = socket;
     };
 
@@ -157,21 +174,27 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
     ws = null;
   },
 
-  sendPrompt: (text) => send({ type: "prompt", text }),
+  sendPrompt: (text) => {
+    set({ lastError: null });
+    return send({ type: "prompt", text });
+  },
 
   approve: (toolUseId, answers) => {
-    send({ type: "approve", toolUseId, ...(answers ? { answers } : {}) });
-    set({ pendingApproval: null });
+    if (send({ type: "approve", toolUseId, ...(answers ? { answers } : {}) })) {
+      set({ pendingApproval: null });
+    }
   },
 
   approveAlways: (toolUseId) => {
-    send({ type: "approve", toolUseId, alwaysAllow: true });
-    set({ pendingApproval: null });
+    if (send({ type: "approve", toolUseId, alwaysAllow: true })) {
+      set({ pendingApproval: null });
+    }
   },
 
   deny: (toolUseId, message) => {
-    send({ type: "deny", toolUseId, message });
-    set({ pendingApproval: null });
+    if (send({ type: "deny", toolUseId, message })) {
+      set({ pendingApproval: null });
+    }
   },
 
   interrupt: () => send({ type: "interrupt" }),

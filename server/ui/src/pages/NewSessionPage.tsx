@@ -7,17 +7,23 @@ import { ArrowLeft } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
 
 export function NewSessionPage() {
-  const { cwd, browseRoot, setCwd, createSession } = useSessionsStore();
+  const { cwd, browseRoot, setCwd, createSession, lastError } = useSessionsStore();
   const [prompt, setPrompt] = useState("");
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleCreate = async () => {
     if (creating) return;
     setCreating(true);
+    setError(null);
     try {
       const sessionId = await createSession({ prompt: prompt.trim() || undefined, cwd });
-      if (sessionId) navigate(`/session/${sessionId}`, { replace: true });
+      if (sessionId) {
+        navigate(`/session/${sessionId}`, { replace: true });
+      } else {
+        setError(lastError ?? "Failed to create session");
+      }
     } finally {
       setCreating(false);
     }
@@ -53,6 +59,7 @@ export function NewSessionPage() {
           <Button onClick={handleCreate} disabled={creating} className="w-full" size="lg">
             {creating ? "Creating..." : "Create Session"}
           </Button>
+          {error && <p className="text-destructive text-sm text-center -mt-3">{error}</p>}
         </div>
       </div>
     </div>

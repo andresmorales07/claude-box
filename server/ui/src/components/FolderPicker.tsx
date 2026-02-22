@@ -14,6 +14,7 @@ export function FolderPicker({ cwd, browseRoot, onCwdChange }: Props) {
   const [open, setOpen] = useState(false);
   const [dirs, setDirs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const rootName = browseRoot.split("/").filter(Boolean).pop() ?? "root";
   const relPath = cwd.startsWith(browseRoot) ? cwd.slice(browseRoot.length).replace(/^\//, "") : "";
@@ -21,16 +22,20 @@ export function FolderPicker({ cwd, browseRoot, onCwdChange }: Props) {
 
   const fetchDirs = useCallback(async (rel: string) => {
     setLoading(true);
+    setError(null);
     try {
       const params = rel ? `?path=${encodeURIComponent(rel)}` : "";
       const res = await fetch(`/api/browse${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) { useAuthStore.getState().logout(); return; }
       if (res.ok) {
         const body = await res.json();
-        setDirs(body.dirs);
+        setDirs(Array.isArray(body.dirs) ? body.dirs : []);
       } else {
+        setError(`Failed to load directories (${res.status})`);
         setDirs([]);
       }
     } catch {
+      setError("Unable to reach server");
       setDirs([]);
     } finally {
       setLoading(false);
@@ -78,7 +83,8 @@ export function FolderPicker({ cwd, browseRoot, onCwdChange }: Props) {
       {open && (
         <div className="max-h-[200px] overflow-y-auto border-t border-border">
           {loading && <div className="px-3 py-2 text-xs text-muted-foreground">Loading...</div>}
-          {!loading && dirs.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No subdirectories</div>}
+          {!loading && error && <div className="px-3 py-2 text-xs text-destructive">{error}</div>}
+          {!loading && !error && dirs.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No subdirectories</div>}
           {!loading && dirs.map((dir) => (
             <button
               key={dir}

@@ -9,7 +9,7 @@ interface Props {
   slashCommands: SlashCommand[];
   isDisabled: boolean;
   isRunning: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string) => boolean;
   onInterrupt: () => void;
 }
 
@@ -28,9 +28,10 @@ export function Composer({ slashCommands, isDisabled, isRunning, onSend, onInter
   }, []);
 
   const handleSubmit = () => {
-    if (!input.trim()) return;
-    onSend(input.trim());
-    setInput("");
+    if (isDisabled || !input.trim()) return;
+    if (onSend(input.trim())) {
+      setInput("");
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

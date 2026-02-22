@@ -1,31 +1,11 @@
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessionsStore } from "@/stores/sessions";
+import { groupByDate } from "@/lib/sessions";
 import { SessionCard } from "@/components/SessionCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus, Search } from "lucide-react";
-
-function groupByDate(sessions: { id: string; lastModified: string; createdAt: string; status: string }[]) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const yesterday = today - 86400000;
-  const weekAgo = today - 7 * 86400000;
-  const groups: { label: string; items: typeof sessions }[] = [
-    { label: "Today", items: [] },
-    { label: "Yesterday", items: [] },
-    { label: "This Week", items: [] },
-    { label: "Older", items: [] },
-  ];
-  for (const s of sessions) {
-    const t = new Date(s.lastModified || s.createdAt).getTime();
-    if (t >= today) groups[0].items.push(s);
-    else if (t >= yesterday) groups[1].items.push(s);
-    else if (t >= weekAgo) groups[2].items.push(s);
-    else groups[3].items.push(s);
-  }
-  return groups.filter((g) => g.items.length > 0);
-}
 
 export function SessionListPage() {
   const { sessions, activeSessionId, searchQuery, setActiveSession, setSearchQuery, fetchSessions } = useSessionsStore();
@@ -52,7 +32,7 @@ export function SessionListPage() {
     if (status === "history") {
       useSessionsStore.getState().resumeSession(id).then((newId) => {
         if (newId) navigate(`/session/${newId}`);
-      });
+      }).catch(console.error);
     } else {
       setActiveSession(id);
       navigate(`/session/${id}`);
@@ -87,7 +67,7 @@ export function SessionListPage() {
             {group.items.map((s) => (
               <SessionCard
                 key={s.id}
-                session={s as any}
+                session={s}
                 isActive={s.id === activeSessionId}
                 onClick={() => handleSelect(s.id, s.status)}
               />

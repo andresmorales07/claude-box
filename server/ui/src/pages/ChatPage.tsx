@@ -9,7 +9,7 @@ import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { Composer } from "@/components/Composer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowLeft } from "lucide-react";
+import { ArrowDown, ArrowLeft, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const statusStyles: Record<string, string> = {
@@ -29,13 +29,14 @@ export function ChatPage() {
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
   const {
-    messages, slashCommands, status, connected, pendingApproval,
+    messages, slashCommands, status, connected, pendingApproval, lastError,
     thinkingText, thinkingStartTime, thinkingDurations,
     connect, disconnect, sendPrompt, approve, approveAlways, deny, interrupt,
   } = useMessagesStore();
   const activeSession = useSessionsStore((s) => s.sessions.find((sess) => sess.id === id));
 
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [dismissedError, setDismissedError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -64,6 +65,7 @@ export function ChatPage() {
   const isThinkingActive = thinkingText.length > 0 && thinkingStartTime != null;
   const isRunning = status === "running" || status === "starting";
   const sessionName = activeSession?.slug || activeSession?.summary || id?.slice(0, 8) || "Chat";
+  const visibleError = lastError && lastError !== dismissedError ? lastError : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -108,6 +110,21 @@ export function ChatPage() {
         )}
       </div>
 
+      {/* Error banner */}
+      {visibleError && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-destructive/10 border-t border-destructive/30 text-destructive text-sm shrink-0">
+          <span className="flex-1">{visibleError}</span>
+          {status === "disconnected" && id && (
+            <Button size="sm" variant="outline" onClick={() => { setDismissedError(visibleError); connect(id); }}>
+              Reconnect
+            </Button>
+          )}
+          <button onClick={() => setDismissedError(visibleError)} className="shrink-0 hover:opacity-70">
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
       {/* Tool approval */}
       {pendingApproval && (
         <ToolApproval
@@ -125,7 +142,7 @@ export function ChatPage() {
         slashCommands={slashCommands}
         isDisabled={isRunning}
         isRunning={isRunning}
-        onSend={(text) => { sendPrompt(text); setIsAtBottom(true); }}
+        onSend={(text) => { const ok = sendPrompt(text); if (ok) setIsAtBottom(true); return ok; }}
         onInterrupt={interrupt}
       />
     </div>

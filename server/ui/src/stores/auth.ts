@@ -8,7 +8,15 @@ interface AuthState {
   logout: () => void;
 }
 
-const storedToken = localStorage.getItem("api_token") ?? "";
+function safeGetItem(key: string): string {
+  try {
+    return localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+const storedToken = safeGetItem("api_token");
 
 export const useAuthStore = create<AuthState>((set) => ({
   token: storedToken,
@@ -16,11 +24,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   setToken: (token) => set({ token }),
   login: () => {
     const token = useAuthStore.getState().token;
-    localStorage.setItem("api_token", token);
+    try { localStorage.setItem("api_token", token); } catch { /* private browsing */ }
     set({ authenticated: true });
   },
   logout: () => {
-    localStorage.removeItem("api_token");
+    try { localStorage.removeItem("api_token"); } catch { /* private browsing */ }
     set({ token: "", authenticated: false });
   },
 }));
