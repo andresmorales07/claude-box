@@ -245,6 +245,8 @@ export class SessionWatcher {
     for (const client of watched.clients) {
       if (client.readyState === 1) { // WebSocket.OPEN
         client.send(payload);
+      } else {
+        watched.clients.delete(client);
       }
     }
   }
