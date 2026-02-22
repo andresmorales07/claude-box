@@ -54,7 +54,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   }
 
   return (
-    <div className="flex flex-col h-full w-[280px] border-r border-border bg-card shrink-0 transition-all duration-200">
+    <div className="flex flex-col h-full w-[280px] border-r border-border bg-card shrink-0 overflow-hidden transition-all duration-200">
       <div className="flex items-center gap-1 px-2 pt-2 pb-0">
         <Button variant="ghost" size="icon-sm" onClick={onToggleCollapse} className="shrink-0" title="Collapse sidebar">
           <PanelLeftClose className="size-4" />
@@ -72,7 +72,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           />
         </div>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         {groups.map((group) => (
           <div key={group.label}>
             <div className="px-4 py-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground">

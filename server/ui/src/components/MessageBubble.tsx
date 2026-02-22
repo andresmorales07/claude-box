@@ -1,8 +1,9 @@
 import { useState } from "react";
-import type { NormalizedMessage, MessagePart, TextPart } from "../types";
+import type { NormalizedMessage, MessagePart, TextPart, ToolResultPart } from "../types";
 import { ThinkingBlock } from "./ThinkingBlock";
 import { Markdown } from "./Markdown";
 import { cn } from "@/lib/utils";
+import { getToolSummary } from "@/lib/tools";
 import { ChevronDown, Wrench, AlertCircle } from "lucide-react";
 
 /** Clean SDK-internal XML markup that may appear in user messages (defense in depth).
@@ -30,35 +31,92 @@ function cleanSdkMarkup(text: string): string {
 interface Props {
   message: NormalizedMessage;
   thinkingDurationMs: number | null;
+  toolResults: Map<string, ToolResultPart>;
 }
 
-function ToolCard({ part }: { part: { type: "tool_use"; toolName: string; input: unknown } | { type: "tool_result"; output: string } }) {
+function ToolCard({
+  toolUse,
+  toolResult,
+}: {
+  toolUse: { type: "tool_use"; toolUseId: string; toolName: string; input: unknown };
+  toolResult?: ToolResultPart | null;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const isUse = part.type === "tool_use";
-  const label = isUse ? part.toolName : "Result";
-  const content = isUse ? JSON.stringify(part.input, null, 2) : part.output;
-  const preview = content.length > 120 ? content.slice(0, 117) + "..." : content;
+  const summary = getToolSummary(toolUse.toolName, toolUse.input);
+  const inputJson = JSON.stringify(toolUse.input, null, 2);
+  const hasResult = toolResult != null && toolResult.output.length > 0;
+  const isError = toolResult?.isError ?? false;
 
   return (
-    <div className="rounded-lg border border-border bg-card/50 overflow-hidden">
+    <div className="rounded-lg border border-border bg-card/50 overflow-hidden text-sm">
+      {/* Header — always visible */}
       <button
         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-accent/30 transition-colors"
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
       >
         <Wrench className="size-3.5 text-amber-400 shrink-0" />
-        <span className="text-sm font-medium text-amber-400">{label}</span>
-        <ChevronDown className={cn("size-3.5 text-muted-foreground ml-auto transition-transform", expanded && "rotate-180")} />
+        <span className="font-medium text-amber-400 shrink-0">{toolUse.toolName}</span>
+        {summary && (
+          <span className="text-muted-foreground truncate text-xs font-mono">{summary}</span>
+        )}
+        {isError && <AlertCircle className="size-3.5 text-destructive shrink-0" />}
+        <ChevronDown
+          className={cn(
+            "size-3.5 text-muted-foreground ml-auto shrink-0 transition-transform",
+            expanded && "rotate-180",
+          )}
+        />
       </button>
-      <div className="px-3 pb-2">
-        <pre className="whitespace-pre-wrap font-mono text-xs leading-snug text-muted-foreground max-h-[300px] overflow-y-auto">
-          {expanded ? content : preview}
-        </pre>
-      </div>
+
+      {/* Expandable detail panel */}
+      {expanded && (
+        <div className="border-t border-border px-3 py-2 space-y-2">
+          {/* Input */}
+          <div>
+            <div className="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              Input
+            </div>
+            <pre className="whitespace-pre-wrap font-mono text-xs leading-snug text-muted-foreground bg-background/50 rounded p-2 max-h-[200px] overflow-y-auto">
+              {inputJson}
+            </pre>
+          </div>
+
+          {/* Output */}
+          {hasResult && (
+            <div>
+              <div className={cn(
+                "text-[0.6875rem] font-semibold uppercase tracking-wider mb-1",
+                isError ? "text-destructive" : "text-muted-foreground",
+              )}>
+                {isError ? "Error" : "Output"}
+              </div>
+              <pre className={cn(
+                "whitespace-pre-wrap font-mono text-xs leading-snug rounded p-2 max-h-[300px] overflow-y-auto",
+                isError
+                  ? "text-destructive bg-destructive/5 border border-destructive/20"
+                  : "text-muted-foreground bg-background/50",
+              )}>
+                {toolResult!.output}
+              </pre>
+            </div>
+          )}
+
+          {!hasResult && toolResult == null && (
+            <div className="text-xs text-muted-foreground italic">Waiting for result...</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function renderPart(part: MessagePart, i: number, thinkingDurationMs: number | null) {
+function renderPart(
+  part: MessagePart,
+  i: number,
+  thinkingDurationMs: number | null,
+  toolResults: Map<string, ToolResultPart>,
+) {
   switch (part.type) {
     case "text":
       return (
@@ -66,10 +124,13 @@ function renderPart(part: MessagePart, i: number, thinkingDurationMs: number | n
           <Markdown>{part.text}</Markdown>
         </div>
       );
-    case "tool_use":
-      return <ToolCard key={i} part={part} />;
+    case "tool_use": {
+      const result = toolResults.get(part.toolUseId) ?? null;
+      return <ToolCard key={i} toolUse={part} toolResult={result} />;
+    }
     case "tool_result":
-      return <ToolCard key={i} part={part} />;
+      // Rendered by the paired ToolCard above — skip standalone rendering
+      return null;
     case "reasoning":
       return <ThinkingBlock key={i} text={part.text} durationMs={thinkingDurationMs} />;
     case "error":
@@ -84,7 +145,13 @@ function renderPart(part: MessagePart, i: number, thinkingDurationMs: number | n
   }
 }
 
-export function MessageBubble({ message, thinkingDurationMs }: Props) {
+export function MessageBubble({ message, thinkingDurationMs, toolResults }: Props) {
+  // Hide user messages that only contain tool_result parts (shown inside ToolCard)
+  if (message.role === "user") {
+    const hasOnlyToolResults = message.parts.every((p) => p.type === "tool_result");
+    if (hasOnlyToolResults) return null;
+  }
+
   if (message.role === "user") {
     const text = cleanSdkMarkup(
       message.parts
@@ -116,7 +183,7 @@ export function MessageBubble({ message, thinkingDurationMs }: Props) {
   if (message.role === "assistant") {
     return (
       <div className="flex flex-col gap-2 max-w-[85%] md:max-w-[70%]">
-        {message.parts.map((part, i) => renderPart(part, i, thinkingDurationMs))}
+        {message.parts.map((part, i) => renderPart(part, i, thinkingDurationMs, toolResults))}
       </div>
     );
   }
