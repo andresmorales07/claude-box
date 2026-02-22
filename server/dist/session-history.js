@@ -148,8 +148,9 @@ export async function listAllSessionHistory() {
     catch {
         return [];
     }
-    const results = await Promise.all(entries
-        .filter((e) => e.isDirectory())
-        .map((e) => listSessionHistoryInDir(join(base, e.name))));
-    return results.flat();
+    const results = [];
+    for (const e of entries.filter((e) => e.isDirectory())) {
+        results.push(...await listSessionHistoryInDir(join(base, e.name)));
+    }
+    return results;
 }

@@ -16,7 +16,7 @@ export function WorkspaceFilter() {
       </div>
       {workspaceFilter && (
         <button
-          onClick={() => setWorkspaceFilter(null)}
+          onClick={() => { setWorkspaceFilter(null); setCwd(browseRoot); }}
           title="Show all workspaces"
           aria-label="Clear workspace filter"
           className="shrink-0 mr-2 text-muted-foreground hover:text-foreground transition-colors"
