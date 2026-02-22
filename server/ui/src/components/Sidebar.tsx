@@ -72,7 +72,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           />
         </div>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         {groups.map((group) => (
           <div key={group.label}>
             <div className="px-4 py-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground">
