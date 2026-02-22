@@ -197,6 +197,22 @@ This starts the API server and web UI on `http://localhost:8080`. The `--root` f
 
 The container sets `BROWSE_ROOT` and `DEFAULT_CWD` env vars explicitly to `/home/hatchpod/workspace`. When running standalone, these default to `process.cwd()`.
 
+## UI Development Workflow
+
+**When modifying `server/ui/src/` files, use the Vite dev server instead of rebuilding `server/public/`.** The production build pipeline (`vite build` → `server/public/`) plus the PWA service worker causes stale cached assets that require hard-refresh and cache clearing. The Vite dev server avoids this entirely with hot module replacement.
+
+```bash
+# Terminal 1: API server (backend)
+cd server && API_PASSWORD=<password> npm start
+
+# Terminal 2: Vite dev server (frontend with HMR)
+cd server/ui && npm run dev
+```
+
+Open `http://localhost:5173` (NOT port 8080). UI changes hot-reload instantly — no build step, no cache clearing. The Vite proxy forwards `/api`, `/ws` (WebSocket), and `/healthz` to the API server on port 8080.
+
+**When to rebuild:** Only rebuild `server/dist/` when `server/src/` (backend TypeScript) changes. Only rebuild `server/public/` before committing (use `/build-and-test` skill).
+
 ## Key Conventions
 
 - Feature branches must use the `feature/<branch-name>` naming convention
@@ -278,6 +294,7 @@ docker rm -f hatchpod-test
 
 User-invokable skills in `.claude/skills/`:
 
+- **`/dev-server`** — Start the Vite dev server + API server for UI development. Use this instead of rebuilding `server/public/` when working on UI files.
 - **`/build-and-test`** — After modifying `server/src/` files: rebuilds `server/dist/` via `npm run build`, runs vitest unit tests, and stages the rebuilt dist files. Stops on failure.
 - **`/docker-e2e`** — Full e2e test cycle: builds Docker image, starts a container on offset ports (17681/12222/18080), waits for healthy, runs Playwright tests, and cleans up. Safe to run inside hatchpod itself.
 
