@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { NormalizedMessage, MessagePart, TextPart, ToolResultPart } from "../types";
-import { ThinkingBlock } from "./ThinkingBlock";
+
 import { Markdown } from "./Markdown";
+import { FileDiffCard } from "./FileDiffCard";
 import { cn } from "@/lib/utils";
 import { getToolSummary } from "@/lib/tools";
 import { cleanMessageText } from "@/lib/message-cleanup";
@@ -9,7 +10,6 @@ import { ChevronDown, Wrench, AlertCircle, Bot } from "lucide-react";
 
 interface Props {
   message: NormalizedMessage;
-  thinkingDurationMs: number | null;
   toolResults: Map<string, ToolResultPart>;
 }
 
@@ -30,19 +30,28 @@ function ToolCard({
     <div className="rounded-lg border border-border bg-card/50 overflow-hidden text-sm">
       {/* Header — always visible */}
       <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-accent/30 transition-colors"
+        className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-accent/30 transition-colors"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >
-        <Wrench className="size-3.5 text-amber-400 shrink-0" />
-        <span className="font-medium text-amber-400 shrink-0">{toolUse.toolName}</span>
-        {summary && (
-          <span className="text-muted-foreground truncate text-xs font-mono">{summary}</span>
-        )}
-        {isError && <AlertCircle className="size-3.5 text-destructive shrink-0" />}
+        <Wrench className="size-3.5 text-amber-400 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-amber-400 shrink-0">{toolUse.toolName}</span>
+            {summary.description && (
+              <span className="text-muted-foreground truncate text-xs">{summary.description}</span>
+            )}
+            {isError && <AlertCircle className="size-3.5 text-destructive shrink-0" />}
+          </div>
+          {summary.command && (
+            <div className="text-muted-foreground/60 text-xs font-mono truncate mt-0.5">
+              <span className="text-muted-foreground/40 mr-1">❯</span>{summary.command}
+            </div>
+          )}
+        </div>
         <ChevronDown
           className={cn(
-            "size-3.5 text-muted-foreground ml-auto shrink-0 transition-transform",
+            "size-3.5 text-muted-foreground shrink-0 mt-0.5 transition-transform",
             expanded && "rotate-180",
           )}
         />
@@ -93,7 +102,6 @@ function ToolCard({
 function renderPart(
   part: MessagePart,
   i: number,
-  thinkingDurationMs: number | null,
   toolResults: Map<string, ToolResultPart>,
 ) {
   switch (part.type) {
@@ -124,6 +132,12 @@ function renderPart(
           </div>
         );
       }
+      // File diff rendering for Write/Edit
+      if (part.toolName === "Write" || part.toolName === "Edit") {
+        const result = toolResults.get(part.toolUseId) ?? null;
+        return <FileDiffCard key={i} toolUse={part} toolResult={result} />;
+      }
+
       const result = toolResults.get(part.toolUseId) ?? null;
       return <ToolCard key={i} toolUse={part} toolResult={result} />;
     }
@@ -131,7 +145,7 @@ function renderPart(
       // Rendered by the paired ToolCard above — skip standalone rendering
       return null;
     case "reasoning":
-      return <ThinkingBlock key={i} text={part.text} durationMs={thinkingDurationMs} />;
+      return null;
     case "error":
       return (
         <div key={i} className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
@@ -144,7 +158,7 @@ function renderPart(
   }
 }
 
-export function MessageBubble({ message, thinkingDurationMs, toolResults }: Props) {
+export function MessageBubble({ message, toolResults }: Props) {
   // Hide user messages that only contain tool_result parts (shown inside ToolCard)
   if (message.role === "user") {
     const hasOnlyToolResults = message.parts.every((p) => p.type === "tool_result");
@@ -182,7 +196,7 @@ export function MessageBubble({ message, thinkingDurationMs, toolResults }: Prop
   if (message.role === "assistant") {
     return (
       <div className="flex flex-col gap-2 max-w-[85%] md:max-w-[70%]">
-        {message.parts.map((part, i) => renderPart(part, i, thinkingDurationMs, toolResults))}
+        {message.parts.map((part, i) => renderPart(part, i, toolResults))}
       </div>
     );
   }
