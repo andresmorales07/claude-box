@@ -7,6 +7,7 @@ type ServerMessage =
   | { type: "message"; message: NormalizedMessage }
   | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown }
   | { type: "status"; status: string; error?: string; source?: "api" | "cli" }
+  | { type: "session_redirected"; newSessionId: string }
   | { type: "slash_commands"; commands: SlashCommand[] }
   | { type: "thinking_delta"; text: string }
   | { type: "replay_complete" }
@@ -51,6 +52,9 @@ let messageCount = 0;
 let currentSessionId: string | null = null;
 // Explicit flag to prevent connect() from wiping pre-seeded history messages
 let _resuming = false;
+// Set during session ID remap to prevent disconnect/connect from tearing down
+// the still-valid WebSocket connection during React navigation
+let _redirectingTo: string | null = null;
 
 function send(msg: unknown): boolean {
   if (ws?.readyState === WebSocket.OPEN) {
@@ -73,6 +77,14 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   lastError: null,
 
   connect: (sessionId: string) => {
+    // After a session redirect, the WebSocket is already connected to the
+    // new session ID (watcher remapped it). Skip the disconnect/reconnect cycle.
+    if (_redirectingTo === sessionId && ws?.readyState === WebSocket.OPEN) {
+      _redirectingTo = null;
+      return;
+    }
+    _redirectingTo = null;
+
     const shouldPreserve = _resuming;
     _resuming = false;
     get().disconnect();
@@ -140,6 +152,18 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
               set({ thinkingText: "", thinkingStartTime: null });
             }
             break;
+          case "session_redirected": {
+            // Server remapped our temp session ID to the real provider ID.
+            // Update our reference and navigate the UI — the WebSocket is
+            // already remapped by the watcher so we don't need to reconnect.
+            const newId = msg.newSessionId;
+            currentSessionId = newId;
+            _redirectingTo = newId;
+            const sessStore = useSessionsStore.getState();
+            sessStore.setActiveSession(newId);
+            sessStore.fetchSessions();
+            break;
+          }
           case "thinking_delta":
             set((s) => ({ thinkingText: s.thinkingText + msg.text }));
             if (thinkingStart == null) thinkingStart = Date.now();
@@ -184,6 +208,9 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   },
 
   disconnect: () => {
+    // During a session redirect, the WebSocket is still valid (watcher remapped it).
+    // Skip teardown so the connection survives React's effect cleanup cycle.
+    if (_redirectingTo !== null) return;
     currentSessionId = null;
     clearTimeout(reconnectTimer);
     reconnectAttempts = 0;

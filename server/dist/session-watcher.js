@@ -20,7 +20,6 @@ export class SessionWatcher {
      * Replays existing messages from the JSONL file, then streams new ones.
      */
     async subscribe(sessionId, client) {
-        // Check if we already have a watch for this session
         let watched = this.sessions.get(sessionId);
         if (watched) {
             // Session already being watched — add client and replay from file
@@ -36,32 +35,26 @@ export class SessionWatcher {
             await this.replayToClient(watched, client);
             return;
         }
-        // Resolve file path via adapter
-        const filePath = await this.adapter.getSessionFilePath(sessionId);
-        if (!filePath) {
-            // No file (e.g., test adapter) — create a client-only watch entry
-            // so broadcastToSubscribers() can deliver live messages.
-            watched = {
-                filePath: null,
-                byteOffset: 0,
-                lineBuffer: "",
-                messageIndex: 0,
-                clients: new Set([client]),
-            };
-            this.sessions.set(sessionId, watched);
-            this.send(client, { type: "replay_complete" });
-            return;
-        }
-        // Create new watch entry
+        // Create the entry IMMEDIATELY (before any await) to prevent race
+        // conditions when multiple clients subscribe concurrently. Without
+        // this, both calls see sessions.get() as undefined, both take this
+        // branch, and the second overwrites the first — losing a client.
         watched = {
-            filePath,
+            filePath: null,
             byteOffset: 0,
             lineBuffer: "",
             messageIndex: 0,
             clients: new Set([client]),
         };
         this.sessions.set(sessionId, watched);
-        // Replay existing content
+        // Resolve file path via adapter (async)
+        const filePath = await this.adapter.getSessionFilePath(sessionId);
+        if (!filePath) {
+            this.send(client, { type: "replay_complete" });
+            return;
+        }
+        // Got a file path — update the entry and replay existing content
+        watched.filePath = filePath;
         await this.replayToClient(watched, client);
     }
     /**
