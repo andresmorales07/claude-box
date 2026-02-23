@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowLeft, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TaskList } from "@/components/TaskList";
 import type { ToolResultPart } from "@/types";
 
 const statusStyles: Record<string, string> = {
@@ -24,6 +25,12 @@ const statusStyles: Record<string, string> = {
 };
 
 const SCROLL_THRESHOLD = 100;
+export interface TaskItem {
+  id: string;
+  subject: string;
+  activeForm?: string;
+  status: "pending" | "in_progress" | "completed" | "deleted";
+}
 
 export function ChatPage() {
   const { id } = useParams<{ id: string }>();
@@ -60,6 +67,52 @@ export function ChatPage() {
       }
     }
     return map;
+  }, [messages]);
+
+  const tasks = useMemo(() => {
+    const taskMap = new Map<string, TaskItem>();
+    // Track toolUseId → pending task for TaskCreate calls awaiting their result
+    const pendingCreates = new Map<string, TaskItem>();
+
+    for (const msg of messages) {
+      if (msg.role === "system") continue;
+      for (const part of msg.parts) {
+        if (part.type === "tool_use" && part.toolName === "TaskCreate") {
+          const input = part.input as Record<string, unknown> | undefined;
+          const subject = (input?.subject as string) || "Untitled task";
+          const activeForm = input?.activeForm as string | undefined;
+          // Temporarily keyed by toolUseId until we get the real task ID from the result
+          const item: TaskItem = { id: part.toolUseId, subject, activeForm, status: "pending" };
+          pendingCreates.set(part.toolUseId, item);
+        }
+        if (part.type === "tool_result") {
+          const pending = pendingCreates.get(part.toolUseId);
+          if (pending) {
+            // Parse "Task #N created successfully" from result output
+            const match = part.output.match(/Task #(\d+)/);
+            const taskId = match ? match[1] : part.toolUseId;
+            pending.id = taskId;
+            taskMap.set(taskId, pending);
+            pendingCreates.delete(part.toolUseId);
+          }
+        }
+        if (part.type === "tool_use" && part.toolName === "TaskUpdate") {
+          const input = part.input as Record<string, unknown> | undefined;
+          const taskId = input?.taskId as string | undefined;
+          if (taskId && taskMap.has(taskId)) {
+            const existing = taskMap.get(taskId)!;
+            if (input?.status) existing.status = input.status as TaskItem["status"];
+            if (input?.subject) existing.subject = input.subject as string;
+            if (input?.activeForm) existing.activeForm = input.activeForm as string;
+          }
+        }
+      }
+    }
+    // Include any creates that haven't gotten a result yet
+    for (const item of pendingCreates.values()) {
+      taskMap.set(item.id, item);
+    }
+    return Array.from(taskMap.values()).filter((t) => t.status !== "deleted");
   }, [messages]);
 
   useEffect(() => {
@@ -116,7 +169,6 @@ export function ChatPage() {
             {messages.map((msg, i) => (
               <MessageBubble key={i} message={msg} thinkingDurationMs={thinkingDurations[i] ?? (msg.role === "assistant" ? msg.thinkingDurationMs : null) ?? null} toolResults={toolResults} />
             ))}
-            {isThinkingActive && <ThinkingIndicator thinkingText={thinkingText} startTime={thinkingStartTime!} />}
             <div ref={messagesEndRef} />
           </div>
         </div>
@@ -157,6 +209,20 @@ export function ChatPage() {
           onApproveAlways={approveAlways}
           onDeny={deny}
         />
+      )}
+
+      {/* Thinking indicator — fixed above composer, not in scroll */}
+      {isThinkingActive && (
+        <div className="max-w-3xl mx-auto px-4 w-full">
+          <ThinkingIndicator thinkingText={thinkingText} startTime={thinkingStartTime!} />
+        </div>
+      )}
+
+      {/* Task list */}
+      {tasks.length > 0 && (
+        <div className="max-w-3xl mx-auto px-4 w-full">
+          <TaskList tasks={tasks} />
+        </div>
       )}
 
       {/* Composer */}

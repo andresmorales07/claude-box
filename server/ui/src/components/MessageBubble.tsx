@@ -107,6 +107,10 @@ function renderPart(
       );
     }
     case "tool_use": {
+      // Task management tools are rendered by the persistent TaskList component
+      if (["TaskCreate", "TaskUpdate", "TaskList", "TaskGet"].includes(part.toolName)) {
+        return null;
+      }
       // Compact rendering for Task (subagent) tool calls
       if (part.toolName === "Task") {
         const input = part.input as Record<string, unknown> | undefined;
