@@ -125,6 +125,36 @@ describe("session-history", () => {
       expect(found!.summary!.length).toBeLessThanOrEqual(80);
     });
 
+    it("extracts summary from array-format user message content", async () => {
+      const sid = randomUUID();
+      const lines = [
+        JSON.stringify({
+          type: "progress",
+          sessionId: sid,
+          slug: "array-content-test",
+          cwd: fakeCwd,
+          timestamp: "2026-02-20T12:00:00.000Z",
+        }),
+        JSON.stringify({
+          type: "user",
+          sessionId: sid,
+          slug: "array-content-test",
+          cwd: fakeCwd,
+          timestamp: "2026-02-20T12:00:00.000Z",
+          message: {
+            role: "user",
+            content: [{ type: "text", text: "Fix the login bug" }],
+          },
+        }),
+      ].join("\n") + "\n";
+      await writeFile(join(fakeProjectDir, `${sid}.jsonl`), lines);
+
+      const result = await listSessionHistory(fakeCwd);
+      const found = result.find((s) => s.id === sid);
+      expect(found).toBeDefined();
+      expect(found!.summary).toBe("Fix the login bug");
+    });
+
     it("caches results and reuses on same mtime", async () => {
       const sid = randomUUID();
       const content = makeJsonl(sid, { slug: "cached-slug" });

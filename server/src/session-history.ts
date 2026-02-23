@@ -91,10 +91,19 @@ async function parseSessionMetadata(
         typeof parsed.message === "object"
       ) {
         const msg = parsed.message as Record<string, unknown>;
-        if (typeof msg.content === "string" && msg.content && !msg.content.startsWith("<")) {
-          summary = msg.content.length > MAX_SUMMARY_LENGTH
-            ? msg.content.slice(0, MAX_SUMMARY_LENGTH)
-            : msg.content;
+        // SDK may write content as a string or as an array of content blocks
+        let rawText: string | null = null;
+        if (typeof msg.content === "string") {
+          rawText = msg.content;
+        } else if (Array.isArray(msg.content)) {
+          const textBlock = (msg.content as Array<{ type?: string; text?: string }>)
+            .find((b) => b.type === "text" && typeof b.text === "string");
+          if (textBlock) rawText = textBlock.text ?? null;
+        }
+        if (rawText && !rawText.startsWith("<")) {
+          summary = rawText.length > MAX_SUMMARY_LENGTH
+            ? rawText.slice(0, MAX_SUMMARY_LENGTH)
+            : rawText;
           // Collapse newlines for display
           summary = summary.replace(/\n+/g, " ").trim();
         }

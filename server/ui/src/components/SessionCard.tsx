@@ -72,7 +72,7 @@ export function SessionCard({ session, isActive, onClick }: Props) {
   const cardContent = (
     <button
       className={cn(
-        "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
+        "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors overflow-hidden",
         "hover:bg-accent/50 active:bg-accent",
         isActive && "bg-accent border-l-2 border-l-primary"
       )}
