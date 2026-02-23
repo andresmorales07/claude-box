@@ -7,7 +7,6 @@ import {
   getActiveSession,
   getSessionCount,
   createSession,
-  interruptSession,
   deleteSession,
 } from "./sessions.js";
 import { listProviders, getProvider } from "./providers/index.js";

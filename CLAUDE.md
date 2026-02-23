@@ -226,6 +226,7 @@ Open `http://localhost:5173` (NOT port 8080). UI changes hot-reload instantly �
 - `docker-compose.yml` includes `cap_add: NET_ADMIN` and `/dev/net/tun` device for Tailscale kernel TUN mode; harmless when Tailscale is not enabled
 - The Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) must only be imported in `server/src/providers/claude-adapter.ts`. All other server and UI code uses the normalized `NormalizedMessage` / `ProviderAdapter` types from `providers/types.ts`. The WebSocket protocol sends `{ type: "message" }` events with normalized payloads.
 - `server/dist/` is tracked in git. After modifying any file under `server/src/`, rebuild with `cd server && npm run build` and commit the updated `server/dist/` files alongside the source changes.
+- **ESLint** is configured in both `server/` and `server/ui/` using ESLint v9 flat config with typescript-eslint. Run `npm run lint` to check and `npm run lint:fix` to auto-fix. The UI config includes `eslint-plugin-react-hooks` and `eslint-plugin-react-refresh`.
 
 ## Testing Strategy
 
@@ -288,6 +289,7 @@ docker rm -f hatchpod-test
 - **Always check for relevant skills and MCP servers** before planning or implementing features. Use the `Skill` tool to invoke skills (e.g., `brainstorming` before design work, `writing-plans` before implementation, `frontend-design` for UI work, `systematic-debugging` for bug fixes).
 - **Use Context7 MCP** (`mcp__plugin_context7_context7__resolve-library-id` and `query-docs`) for up-to-date library documentation instead of relying on web searches or cached knowledge.
 - **Use Serena MCP** for semantic code exploration (symbol overview, find references) when navigating the codebase efficiently.
+- **Use the `frontend-design` skill** (invoke via `Skill` tool) whenever creating or modifying UI components, pages, or layouts in `server/ui/src/` (web UI) or any mobile app directory. This applies to visual changes, new screens, component redesigns, and responsive layout work — not backend-only API changes.
 - **Follow the brainstorming → writing-plans → implementation pipeline** for any non-trivial feature work. Design docs go in `docs/plans/YYYY-MM-DD-<topic>-design.md`.
 
 ### Skills
@@ -309,4 +311,4 @@ Specialized review agents in `.claude/agents/`:
 
 Configured in `.claude/settings.json`:
 
-- **TypeScript type-check** (PostToolUse) — Runs `tsc --noEmit` after any Edit/Write to files under `server/src/` or `server/ui/src/`. Catches type errors immediately after edits. Note: the hook paths in `.claude/settings.json` are hardcoded to the container path (`/home/hatchpod/workspace/repos/hatchpod/`); adjust when running Claude Code outside the container.
+- **TypeScript type-check + ESLint** (PostToolUse) — Runs `tsc --noEmit` followed by `eslint` after any Edit/Write to files under `server/src/` or `server/ui/src/`. Catches type errors and lint issues immediately after edits. ESLint only runs if type-checking passes. Note: the hook paths in `.claude/settings.json` are hardcoded to the container path (`/home/hatchpod/workspace/repos/hatchpod/`); adjust when running Claude Code outside the container.
