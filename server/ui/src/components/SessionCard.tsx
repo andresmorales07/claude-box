@@ -80,7 +80,15 @@ export function SessionCard({ session, isActive, onClick }: Props) {
     >
       <span className={cn("w-2 h-2 rounded-full shrink-0", statusDot[session.status] ?? "bg-zinc-500")} />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">{sessionDisplayName(session)}</div>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-sm font-medium truncate">{sessionDisplayName(session)}</span>
+          <Badge variant="secondary" className="text-[0.625rem] leading-none px-1.5 py-0 shrink-0">
+            {session.provider}
+          </Badge>
+          {session.hasPendingApproval && (
+            <Badge variant="destructive" className="text-[0.625rem] leading-none px-1.5 py-0 shrink-0">!</Badge>
+          )}
+        </div>
         <div className="text-xs text-muted-foreground mt-0.5">
           {relativeTime(session.lastModified || session.createdAt)}
           {session.numTurns > 0 && ` · ${session.numTurns} turns`}
@@ -91,12 +99,6 @@ export function SessionCard({ session, isActive, onClick }: Props) {
           </p>
         )}
       </div>
-      <Badge variant="secondary" className="text-[0.625rem] px-1.5 py-0 shrink-0">
-        {session.provider}
-      </Badge>
-      {session.hasPendingApproval && (
-        <Badge variant="destructive" className="text-[0.625rem] px-1.5 py-0 shrink-0">!</Badge>
-      )}
     </button>
   );
 

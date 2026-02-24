@@ -78,6 +78,8 @@ export function ChatPage() {
   // Track previous message count for scroll preservation on prepend
   const prevMessagesLenRef = useRef(0);
   const prevScrollHeightRef = useRef(0);
+  // Flag to suppress auto-scroll after prepending older messages
+  const justPrependedRef = useRef(false);
 
   const toolResults = useMemo(() => {
     const map = new Map<string, ToolResultPart>();
@@ -150,6 +152,12 @@ export function ChatPage() {
   }, []);
 
   useEffect(() => {
+    // Skip auto-scroll when older messages were just prepended — the
+    // useLayoutEffect already restored scroll position.
+    if (justPrependedRef.current) {
+      justPrependedRef.current = false;
+      return;
+    }
     if (isAtBottom) scrollToBottom();
   }, [messages, thinkingText, isAtBottom, scrollToBottom]);
 
@@ -167,6 +175,8 @@ export function ChatPage() {
       if (heightDiff > 0) {
         el.scrollTop += heightDiff;
       }
+      // Suppress the auto-scroll useEffect that would otherwise snap to bottom
+      justPrependedRef.current = true;
     }
 
     prevMessagesLenRef.current = currentLen;

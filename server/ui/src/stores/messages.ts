@@ -188,14 +188,26 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
             }
             break;
           }
-          case "status":
-            set({
-              status: msg.status,
-              ...(msg.source ? { source: msg.source } : {}),
-            });
-            if (msg.status !== "running") {
+          case "status": {
+            // Only clear thinking on terminal states — not on intermediate
+            // statuses like "waiting_for_approval" which can arrive while the
+            // model is still generating thinking content.
+            const isTerminal = msg.status === "completed" || msg.status === "error"
+              || msg.status === "idle" || msg.status === "interrupted"
+              || msg.status === "disconnected" || msg.status === "history";
+            if (isTerminal) {
               thinkingStart = null;
-              set({ thinkingText: "", thinkingStartTime: null });
+              set({
+                status: msg.status,
+                ...(msg.source ? { source: msg.source } : {}),
+                thinkingText: "",
+                thinkingStartTime: null,
+              });
+            } else {
+              set({
+                status: msg.status,
+                ...(msg.source ? { source: msg.source } : {}),
+              });
             }
             // Re-fetch sessions on terminal states so the session list
             // picks up slug/summary from the now-finalized JSONL file.
@@ -203,6 +215,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
               useSessionsStore.getState().fetchSessions();
             }
             break;
+          }
           case "session_redirected": {
             // Server remapped our temp session ID to the real provider ID.
             // Update our reference and navigate the UI — the WebSocket is
@@ -221,9 +234,11 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
             break;
           }
           case "thinking_delta":
-            set((s) => ({ thinkingText: s.thinkingText + msg.text }));
             if (thinkingStart == null) thinkingStart = Date.now();
-            set({ thinkingStartTime: thinkingStart });
+            set((s) => ({
+              thinkingText: s.thinkingText + msg.text,
+              thinkingStartTime: thinkingStart,
+            }));
             break;
           case "tool_approval_request":
             set({ pendingApproval: { toolName: msg.toolName, toolUseId: msg.toolUseId, input: msg.input } });

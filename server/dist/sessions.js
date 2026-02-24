@@ -208,9 +208,7 @@ async function runSession(session, prompt, permissionMode, model, allowedTools, 
                 });
             },
             onThinkingDelta: (text) => {
-                if (session.status === "running") {
-                    broadcastToSession(session.sessionId, { type: "thinking_delta", text });
-                }
+                broadcastToSession(session.sessionId, { type: "thinking_delta", text });
             },
         });
         // Suppress file-based polling for this session while we're running.
