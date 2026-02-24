@@ -302,25 +302,32 @@ async function runSession(
       if (!watcher) {
         console.error(`Session remap: watcher not initialized, clients will not receive updates`);
       } else {
-        // Remap the watcher entry, unsuppress polling, and sync its byte
-        // offset to the current file size so it doesn't replay messages
-        // that were already broadcast directly during execution.
+        // Remap the watcher entry, sync offset to EOF, THEN unsuppress polling.
+        // Order matters: syncOffsetToEnd must complete before polling resumes,
+        // otherwise the watcher re-reads the JSONL from offset 0 and broadcasts
+        // every message that was already delivered directly → duplicates.
         watcher.remap(oldId, session.sessionId);
-        watcher.unsuppressPolling(session.sessionId);
-        watcher.syncOffsetToEnd(session.sessionId).catch((err) => {
+        try {
+          await watcher.syncOffsetToEnd(session.sessionId);
+        } catch (err) {
           console.warn(`Failed to sync watcher offset for ${session.sessionId}:`, err);
-        });
+        }
+        watcher.unsuppressPolling(session.sessionId);
       }
       broadcastToSession(session.sessionId, {
         type: "session_redirected",
         newSessionId: session.sessionId,
       });
     } else if (watcher) {
-      // No remap needed (e.g., resumed session) — unsuppress and sync offset
-      watcher.unsuppressPolling(session.sessionId);
-      watcher.syncOffsetToEnd(session.sessionId).catch((err) => {
+      // No remap needed (e.g., resumed session) — sync offset to EOF first,
+      // THEN unsuppress polling. Without this ordering, the watcher can poll
+      // before the offset is advanced and re-broadcast already-delivered messages.
+      try {
+        await watcher.syncOffsetToEnd(session.sessionId);
+      } catch (err) {
         console.warn(`Failed to sync watcher offset for ${session.sessionId}:`, err);
-      });
+      }
+      watcher.unsuppressPolling(session.sessionId);
     }
 
     // Status may have been mutated externally by interruptSession()
@@ -329,10 +336,13 @@ async function runSession(
       session.status = "completed";
     }
   } catch (err) {
-    // Ensure polling is unsuppressed on error so the watcher can take over
+    // Ensure polling is unsuppressed on error so the watcher can take over.
+    // Sync offset first to prevent re-broadcast of already-delivered messages.
     if (watcher) {
+      try {
+        await watcher.syncOffsetToEnd(session.sessionId);
+      } catch { /* best-effort on error path */ }
       watcher.unsuppressPolling(session.sessionId);
-      watcher.syncOffsetToEnd(session.sessionId).catch(() => {});
     }
 
     const currentStatus = session.status as ActiveSession["status"];

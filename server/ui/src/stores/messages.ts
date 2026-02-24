@@ -160,7 +160,16 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
               thinkingStart = null;
               set({ thinkingText: "", thinkingStartTime: null });
             }
-            set((s) => ({ messages: [...s.messages, m] }));
+            // Deduplicate: skip if we already have a message with the same role+index.
+            // This prevents duplicates when the file-based watcher replays messages
+            // that were already delivered via direct broadcast.
+            set((s) => {
+              const isDuplicate = s.messages.some(
+                (existing) => existing.role === m.role && existing.index === m.index,
+              );
+              if (isDuplicate) return s;
+              return { messages: [...s.messages, m] };
+            });
             break;
           }
           case "replay_complete": {
