@@ -54,6 +54,17 @@ describe("GET /api/openapi.json", () => {
     const body = await res.json();
     expect(body.info.description).toContain("WebSocket");
   });
+
+  it("includes registered component schemas", async () => {
+    const res = await rawFetch("/api/openapi.json");
+    const body = await res.json();
+    const schemas = body.components?.schemas;
+    expect(schemas).toBeDefined();
+    expect(schemas.CreateSessionRequest).toBeDefined();
+    expect(schemas.NormalizedMessage).toBeDefined();
+    expect(schemas.ErrorResponse).toBeDefined();
+    expect(schemas.HealthResponse).toBeDefined();
+  });
 });
 
 describe("GET /api/docs", () => {
@@ -78,6 +89,56 @@ describe("GET /api/docs", () => {
     const csp = res.headers.get("content-security-policy");
     expect(csp).toBeDefined();
     expect(csp).toContain("cdn.jsdelivr.net");
+  });
+});
+
+describe("POST /api/sessions validation (Zod error messages in HTTP responses)", () => {
+  it("returns 'prompt must be a string' for non-string prompt", async () => {
+    const res = await api("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ prompt: 42 }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("prompt must be a string");
+  });
+
+  it("returns 'invalid permissionMode' for unknown mode", async () => {
+    const res = await api("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ permissionMode: "yolo" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("invalid permissionMode");
+  });
+
+  it("returns 'resumeSessionId must be a valid UUID' for bad UUID", async () => {
+    const res = await api("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ resumeSessionId: "not-a-uuid" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("resumeSessionId must be a valid UUID");
+  });
+
+  it("returns 'invalid cwd' for cwd with null byte", async () => {
+    const res = await api("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ cwd: "/foo\0bar" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("invalid cwd");
+  });
+
+  it("rejects non-array allowedTools", async () => {
+    const res = await api("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ allowedTools: "Bash" }),
+    });
+    expect(res.status).toBe(400);
   });
 });
 

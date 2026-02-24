@@ -20,7 +20,7 @@ export type {
   PermissionModeCommon,
 } from "../schemas/index.js";
 
-// ── Non-serializable types (contain functions, AbortSignal, AsyncGenerator) ──
+// ── Provider interface types (contain callbacks, AbortSignal, AsyncGenerator) ──
 
 import type { NormalizedMessage, PermissionModeCommon, PaginatedMessages, SessionListItem } from "../schemas/index.js";
 

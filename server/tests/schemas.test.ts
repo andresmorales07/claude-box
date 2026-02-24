@@ -70,6 +70,29 @@ describe("CreateSessionRequestSchema", () => {
       expect(result.error.issues[0].message).toBe("invalid cwd");
     }
   });
+
+  it("accepts valid allowedTools array", () => {
+    const result = CreateSessionRequestSchema.safeParse({ allowedTools: ["Bash", "Read", "Write"] });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects non-array allowedTools", () => {
+    const result = CreateSessionRequestSchema.safeParse({ allowedTools: "Bash" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects allowedTools with non-string elements", () => {
+    const result = CreateSessionRequestSchema.safeParse({ allowedTools: [42, true] });
+    expect(result.success).toBe(false);
+  });
+
+  it("strips unknown properties (intentional — matches original destructuring behavior)", () => {
+    const result = CreateSessionRequestSchema.safeParse({ prompt: "hi", unknownField: "evil" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty("unknownField");
+    }
+  });
 });
 
 describe("NormalizedMessageSchema", () => {
@@ -142,6 +165,33 @@ describe("NormalizedMessageSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts reasoning parts", () => {
+    const result = NormalizedMessageSchema.safeParse({
+      role: "assistant",
+      parts: [{ type: "reasoning", text: "Let me think about this..." }],
+      index: 0,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts error parts", () => {
+    const result = NormalizedMessageSchema.safeParse({
+      role: "assistant",
+      parts: [{ type: "error", message: "Something went wrong", code: "TOOL_FAILED" }],
+      index: 0,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts error parts without optional code", () => {
+    const result = NormalizedMessageSchema.safeParse({
+      role: "assistant",
+      parts: [{ type: "error", message: "Something went wrong" }],
+      index: 0,
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects unknown role", () => {
     const result = NormalizedMessageSchema.safeParse({
       role: "admin",
@@ -180,5 +230,20 @@ describe("isPathContained", () => {
 
   it("returns false for a prefix trick (workspaceFoo)", () => {
     expect(isPathContained("/workspace", "/workspaceFoo")).toBe(false);
+  });
+
+  it("resolves relative paths against root", () => {
+    // "subdir" relative to "/workspace" → "/workspace/subdir"
+    expect(isPathContained("/workspace", "subdir")).toBe(true);
+  });
+
+  it("returns true for empty target (resolves to cwd, which may vary)", () => {
+    // Empty string resolves to process.cwd() via path.resolve
+    const cwd = process.cwd();
+    expect(isPathContained(cwd, "")).toBe(true);
+  });
+
+  it("returns false for a relative traversal beyond root", () => {
+    expect(isPathContained("/workspace", "../etc/passwd")).toBe(false);
   });
 });

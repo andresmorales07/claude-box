@@ -8,7 +8,7 @@ extendZodWithOpenApi(z);
 export const UuidSchema = z
   .string()
   .uuid()
-  .openapi({ description: "UUID v4 identifier", example: "550e8400-e29b-41d4-a716-446655440000" });
+  .openapi({ description: "UUID identifier (case-insensitive per RFC 4122)", example: "550e8400-e29b-41d4-a716-446655440000" });
 
 export const ErrorResponseSchema = z
   .object({

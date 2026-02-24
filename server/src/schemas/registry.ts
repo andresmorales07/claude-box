@@ -139,7 +139,10 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "Array of session summaries",
+      description:
+        "Array of session summaries. Active API sessions return `SessionSummaryDTO` " +
+        "(with status, cost, turns); historical CLI sessions return `SessionListItem` " +
+        "(with slug, summary). The two are merged and sorted by lastModified.",
       content: {
         "application/json": {
           schema: z.union([
@@ -216,7 +219,9 @@ registry.registerPath({
   method: "get",
   path: "/api/sessions/{id}/history",
   summary: "Session message history",
-  description: "Returns all normalized messages for a session from provider storage.",
+  description:
+    "Returns all normalized messages for a session from the provider's on-disk JSONL log. " +
+    "Unlike `/messages` (which supports pagination), this endpoint returns the complete history in one response.",
   tags: ["Sessions"],
   security: [{ [bearerAuth.name]: [] }],
   request: {
@@ -332,7 +337,8 @@ function readVersion(): string {
   try {
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string };
     return pkg.version;
-  } catch {
+  } catch (err) {
+    console.warn("Failed to read version from package.json, using 0.0.0:", err);
     return "0.0.0";
   }
 }

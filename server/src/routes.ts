@@ -132,7 +132,6 @@ export async function handleRequest(
       return;
     }
 
-    // Validate with Zod schema (handles type checks, enum validation, UUID format, null bytes)
     const result = CreateSessionRequestSchema.safeParse(raw);
     if (!result.success) {
       const firstIssue = result.error.issues[0];
@@ -232,7 +231,8 @@ export async function handleRequest(
     let adapter;
     try {
       adapter = getProvider(provider);
-    } catch {
+    } catch (err) {
+      console.warn(`Messages endpoint: unknown provider "${provider}":`, err);
       json(res, 400, { error: "unknown provider" });
       return;
     }

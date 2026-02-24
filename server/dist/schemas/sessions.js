@@ -1,5 +1,6 @@
 import { z } from "zod";
 import "./common.js"; // ensure extendZodWithOpenApi runs first
+import { PermissionModeCommonSchema } from "./providers.js";
 // ── Session status ──
 export const SessionStatusSchema = z
     .enum([
@@ -20,7 +21,7 @@ export const CreateSessionRequestSchema = z
         .string({ message: "prompt must be a string" })
         .optional(),
     permissionMode: z
-        .enum(["default", "acceptEdits", "bypassPermissions", "plan", "delegate", "dontAsk"], { message: "invalid permissionMode" })
+        .enum(PermissionModeCommonSchema.options, { message: "invalid permissionMode" })
         .optional()
         .openapi({ description: "Permission mode for the session" }),
     provider: z.string().optional().openapi({ description: "Provider ID (defaults to 'claude')" }),
