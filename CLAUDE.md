@@ -44,6 +44,7 @@ Two Docker volumes persist state across container restarts:
 │   ├── settings.json       # Hooks (TypeScript type-check on edit)
 │   ├── skills/
 │   │   ├── build-and-test/SKILL.md  # /build-and-test — rebuild dist, vitest, stage
+│   │   ├── dev-server/SKILL.md      # /dev-server — Vite dev server + API server
 │   │   └── docker-e2e/SKILL.md      # /docker-e2e — Docker build + Playwright e2e
 │   └── agents/
 │       ├── security-reviewer.md     # Auth, path traversal, container security review
@@ -66,6 +67,7 @@ Two Docker volumes persist state across container restarts:
 │   │   ├── index.ts        # Entry point: HTTP + WS server
 │   │   ├── auth.ts         # Bearer token auth, rate limiting (API_PASSWORD, TRUST_PROXY)
 │   │   ├── session-history.ts # CLI session history reader
+│   │   ├── session-watcher.ts # Session file watcher (JSONL → WS)
 │   │   ├── sessions.ts     # Session manager (provider-agnostic)
 │   │   ├── routes.ts       # REST route handlers (sessions, browse, history)
 │   │   ├── ws.ts           # WebSocket handler
@@ -75,6 +77,8 @@ Two Docker volumes persist state across container restarts:
 │   │       ├── types.ts    # NormalizedMessage, ProviderAdapter interface
 │   │       ├── claude-adapter.ts  # Claude SDK adapter (sole SDK import)
 │   │       ├── test-adapter.ts    # Test/mock adapter for development
+│   │       ├── message-cleanup.ts # Message text cleanup utilities
+│   │       ├── tool-summary.ts    # Tool summary extraction from messages
 │   │       └── index.ts    # Provider registry
 │   └── ui/                 # React web UI (Vite + Tailwind CSS v4 + shadcn/ui)
 │       ├── package.json    # UI dependencies
@@ -84,13 +88,10 @@ Two Docker volumes persist state across container restarts:
 │           ├── main.tsx            # React entry point
 │           ├── App.tsx             # Router and auth gate
 │           ├── globals.css         # Tailwind imports + shadcn theme tokens (dark theme)
-│           ├── types.ts            # UI-side normalized message types
 │           ├── lib/
 │           │   ├── utils.ts        # cn() class merge utility (tailwind-merge + clsx)
 │           │   ├── sessions.ts     # Session API helpers
-│           │   ├── message-cleanup.ts # Message text cleanup utilities
-│           │   ├── syntax.ts       # Shared PrismLight language registration
-│           │   └── tools.ts        # Tool summary extraction (getToolSummary)
+│           │   └── syntax.ts       # Shared PrismLight language registration
 │           ├── hooks/
 │           │   ├── useMediaQuery.ts # Responsive breakpoint hook
 │           │   └── useSwipe.ts     # Touch swipe gesture hook
@@ -125,6 +126,7 @@ Two Docker volumes persist state across container restarts:
 │                   ├── input.tsx
 │                   ├── scroll-area.tsx
 │                   └── tooltip.tsx
+├── server/tests/               # Vitest unit tests (21 test files + helpers.ts)
 └── rootfs/                 # Files copied into the container at /
     └── etc/
         ├── ssh/sshd_config
