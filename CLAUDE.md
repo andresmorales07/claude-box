@@ -250,6 +250,7 @@ The test server on port 9080 can serve CLI session history and test-provider ses
 - The Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) must only be imported in `server/src/providers/claude-adapter.ts`. All other server and UI code uses the normalized `NormalizedMessage` / `ProviderAdapter` types from `providers/types.ts`. The WebSocket protocol sends `{ type: "message" }` events with normalized payloads.
 - `server/dist/` is tracked in git. After modifying any file under `server/src/`, rebuild with `cd server && npm run build` and commit the updated `server/dist/` files alongside the source changes.
 - **ESLint** is configured in both `server/` and `server/ui/` using ESLint v9 flat config with typescript-eslint. Run `npm run lint` to check and `npm run lint:fix` to auto-fix. The UI config includes `eslint-plugin-react-hooks` and `eslint-plugin-react-refresh`.
+- **Future-proof implementations over workarounds** — Always prefer the architecturally correct, future-proof approach even when it's more complex. Do not suggest a simpler workaround just because the proper solution requires more effort. This project has zero users, so breaking changes are free — leverage this to iterate toward the right architecture without backwards-compatibility constraints.
 
 ## Testing Strategy
 
