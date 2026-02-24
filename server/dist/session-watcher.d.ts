@@ -15,6 +15,8 @@ export declare class SessionWatcher {
     constructor(adapter: ProviderAdapter);
     /** Number of sessions currently being watched. */
     get watchedCount(): number;
+    /** Return the current message index for a session (i.e. how many messages have been seen). */
+    getMessageIndex(sessionId: string): number;
     /**
      * Subscribe a WebSocket client to a session.
      * Replays existing messages from the JSONL file, then streams new ones.

@@ -17,6 +17,10 @@ export class SessionWatcher {
     get watchedCount() {
         return this.sessions.size;
     }
+    /** Return the current message index for a session (i.e. how many messages have been seen). */
+    getMessageIndex(sessionId) {
+        return this.sessions.get(sessionId)?.messageIndex ?? 0;
+    }
     /**
      * Subscribe a WebSocket client to a session.
      * Replays existing messages from the JSONL file, then streams new ones.

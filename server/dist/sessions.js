@@ -219,16 +219,24 @@ async function runSession(session, prompt, permissionMode, model, allowedTools, 
         // JSONL file and broadcast them a second time → duplicate messages.
         if (watcher)
             watcher.suppressPolling(session.sessionId);
-        // The SDK doesn't yield the initial user prompt back from the iterator —
-        // it's the input to sdkQuery(). Broadcast a synthetic user message so
-        // connected clients see the prompt in the chat immediately. This covers
-        // the sendFollowUp(idle) path where the WS client is already connected.
-        // For sessions created with a prompt from the REST API (NewSessionPage),
-        // the client hasn't connected yet so ws.ts sends the prompt on connect.
-        if (!resumeSessionId) {
+        // The SDK doesn't yield the user prompt back from the iterator — it's
+        // the input to sdkQuery(). Broadcast a synthetic user message so
+        // connected clients see the prompt in the chat immediately.
+        //
+        // For new sessions created via REST (NewSessionPage), the WS client
+        // hasn't connected yet — ws.ts sends the prompt on WS connect via
+        // initialPrompt. The dedup logic in the UI (role + index) prevents
+        // the duplicate when this broadcast also arrives.
+        //
+        // For follow-up messages (resumeSessionId is set), the WS client IS
+        // already connected, so this broadcast is the only way the user prompt
+        // reaches the UI during the live session. We use the watcher's current
+        // messageIndex so the index doesn't collide with already-replayed messages.
+        {
+            const promptIndex = watcher ? watcher.getMessageIndex(session.sessionId) : 0;
             broadcastToSession(session.sessionId, {
                 type: "message",
-                message: { role: "user", parts: [{ type: "text", text: prompt }], index: 0 },
+                message: { role: "user", parts: [{ type: "text", text: prompt }], index: promptIndex },
             });
         }
         // Manual iteration: we need the generator's return value (ProviderSessionResult)

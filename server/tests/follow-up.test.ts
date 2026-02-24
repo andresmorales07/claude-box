@@ -46,6 +46,70 @@ describe("Follow-up Messages", () => {
     ws.close();
   });
 
+  it("broadcasts user prompt as a message for follow-up", async () => {
+    // Create idle session (no prompt)
+    const createRes = await api("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ provider: "test" }),
+    });
+    const { id } = await createRes.json() as { id: string };
+
+    // Connect WS and send a follow-up prompt
+    const ws = await connectWs(id);
+    await collectMessages(ws, (m) => m.type === "replay_complete");
+
+    ws.send(JSON.stringify({ type: "prompt", text: "Hello from user" }));
+
+    // Collect all messages until session completes
+    const messages = await collectMessages(ws, (msg) =>
+      msg.type === "status" && (msg as ServerMessage & { status: string }).status === "completed",
+    );
+
+    // The user prompt should appear as a message event with role "user"
+    type MsgEvent = ServerMessage & { message: { role: string; parts: Array<{ type: string; text?: string }> } };
+    const userMsgs = messages
+      .filter((m): m is MsgEvent => m.type === "message" && (m as MsgEvent).message?.role === "user");
+
+    expect(userMsgs.length).toBeGreaterThanOrEqual(1);
+    const userTextPart = userMsgs[0].message.parts.find((p) => p.type === "text");
+    expect(userTextPart?.text).toBe("Hello from user");
+
+    ws.close();
+  });
+
+  it("broadcasts user prompt for second follow-up after completion", async () => {
+    // Create session with initial prompt, wait for it to complete
+    const createRes = await api("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ prompt: "First", provider: "test" }),
+    });
+    const { id } = await createRes.json();
+    await waitForStatus(id, "completed");
+
+    // Connect WS and send a second prompt
+    const ws = await connectWs(id);
+    await collectMessages(ws, (m) => m.type === "replay_complete");
+
+    ws.send(JSON.stringify({ type: "prompt", text: "Second follow-up" }));
+
+    // Collect messages until completion
+    const messages = await collectMessages(ws, (msg) =>
+      msg.type === "status" && (msg as ServerMessage & { status: string }).status === "completed",
+    );
+
+    // The second user prompt should appear in the stream
+    type MsgEvent = ServerMessage & { message: { role: string; parts: Array<{ type: string; text?: string }> } };
+    const userMsgs = messages
+      .filter((m): m is MsgEvent => m.type === "message" && (m as MsgEvent).message?.role === "user");
+
+    const hasSecondPrompt = userMsgs.some((m) =>
+      m.message.parts.some((p) => p.type === "text" && p.text === "Second follow-up"),
+    );
+    expect(hasSecondPrompt).toBe(true);
+
+    ws.close();
+  });
+
   it("sends a second follow-up after completion", async () => {
     // Create session with initial prompt
     const createRes = await api("/api/sessions", {
