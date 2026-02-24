@@ -39,6 +39,141 @@ function isAskUserQuestion(input: unknown): input is { questions: Question[] } {
     });
 }
 
+interface ApprovalField {
+  label: string;
+  value: string;
+  mono?: boolean;
+  chip?: boolean;
+}
+
+interface ApprovalDisplay {
+  primaryLabel: string;
+  fields: ApprovalField[];
+}
+
+function truncateApproval(s: string, max = 120): string {
+  return s.length > max ? s.slice(0, max - 3) + "..." : s;
+}
+
+function getApprovalDisplay(toolName: string, input: unknown): ApprovalDisplay {
+  const obj = (input != null && typeof input === "object" && !Array.isArray(input))
+    ? input as Record<string, unknown>
+    : {};
+
+  if (toolName === "Bash" && typeof obj.command === "string") {
+    const description = typeof obj.description === "string"
+      ? obj.description
+      : truncateApproval(obj.command);
+    return {
+      primaryLabel: description,
+      fields: [{ label: "command", value: truncateApproval(obj.command, 200), mono: true, chip: true }],
+    };
+  }
+
+  if (toolName === "Read" && typeof obj.file_path === "string") {
+    return {
+      primaryLabel: "Read file",
+      fields: [{ label: "path", value: obj.file_path, mono: true }],
+    };
+  }
+
+  if (toolName === "Write" && typeof obj.file_path === "string") {
+    const fields: ApprovalField[] = [{ label: "path", value: obj.file_path, mono: true }];
+    if (typeof obj.content === "string" && obj.content.length > 0) {
+      fields.push({ label: "content", value: truncateApproval(obj.content, 160), mono: true });
+    }
+    return { primaryLabel: "Write file", fields };
+  }
+
+  if (toolName === "Edit" && typeof obj.file_path === "string") {
+    const fields: ApprovalField[] = [{ label: "path", value: obj.file_path, mono: true }];
+    if (typeof obj.new_string === "string" && obj.new_string.length > 0) {
+      fields.push({ label: "new content", value: truncateApproval(obj.new_string, 160), mono: true });
+    }
+    return { primaryLabel: "Edit file", fields };
+  }
+
+  if (toolName === "Glob" && typeof obj.pattern === "string") {
+    const fields: ApprovalField[] = [{ label: "pattern", value: obj.pattern, mono: true, chip: true }];
+    if (typeof obj.path === "string") {
+      fields.push({ label: "in", value: obj.path, mono: true });
+    }
+    return { primaryLabel: "Find files", fields };
+  }
+
+  if (toolName === "Grep" && typeof obj.pattern === "string") {
+    const fields: ApprovalField[] = [{ label: "pattern", value: obj.pattern, mono: true, chip: true }];
+    if (typeof obj.path === "string") {
+      fields.push({ label: "in", value: obj.path, mono: true });
+    }
+    return { primaryLabel: "Search in files", fields };
+  }
+
+  if (toolName === "WebFetch" && typeof obj.url === "string") {
+    const fields: ApprovalField[] = [{ label: "url", value: truncateApproval(obj.url, 120), mono: true }];
+    if (typeof obj.prompt === "string" && obj.prompt.length > 0) {
+      fields.push({ label: "prompt", value: truncateApproval(obj.prompt, 100) });
+    }
+    return { primaryLabel: "Fetch URL", fields };
+  }
+
+  if (toolName === "WebSearch" && typeof obj.query === "string") {
+    return {
+      primaryLabel: "Web search",
+      fields: [{ label: "query", value: obj.query, chip: true }],
+    };
+  }
+
+  if (toolName === "Task" && typeof obj.description === "string") {
+    const fields: ApprovalField[] = [{ label: "task", value: truncateApproval(obj.description, 200) }];
+    if (typeof obj.subagent_type === "string") {
+      fields.push({ label: "agent", value: obj.subagent_type, mono: true });
+    }
+    return { primaryLabel: "Run subagent", fields };
+  }
+
+  const fields: ApprovalField[] = Object.entries(obj)
+    .filter(([, v]) => typeof v === "string" && (v as string).length > 0)
+    .slice(0, 6)
+    .map(([k, v]) => ({ label: k, value: truncateApproval(v as string, 120), mono: true }));
+  return { primaryLabel: toolName, fields };
+}
+
+function ToolInputDisplay({ toolName, input }: { toolName: string; input: unknown }) {
+  const display = getApprovalDisplay(toolName, input);
+  return (
+    <div className="mb-3 space-y-1.5">
+      {display.primaryLabel !== toolName && (
+        <p className="text-sm text-foreground leading-snug">{display.primaryLabel}</p>
+      )}
+      {display.fields.map((field) =>
+        field.chip ? (
+          <div key={field.label} className="flex items-start gap-2">
+            <span className="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground/60 mt-0.5 w-14 shrink-0">
+              {field.label}
+            </span>
+            <code className="flex-1 px-2 py-0.5 rounded bg-background/70 font-mono text-xs text-foreground border border-border/60 break-all">
+              {field.value}
+            </code>
+          </div>
+        ) : (
+          <div key={field.label} className="flex items-start gap-2">
+            <span className="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground/60 mt-0.5 w-14 shrink-0">
+              {field.label}
+            </span>
+            <span className={cn(
+              "flex-1 text-xs text-muted-foreground break-all leading-snug",
+              field.mono && "font-mono"
+            )}>
+              {field.value}
+            </span>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 const OTHER_KEY = "\0__other__";
 
 function AskUserQuestionUI({ questions, toolUseId, onApprove, onDeny }: {
@@ -190,9 +325,7 @@ function SwipeableToolApproval({ toolName, toolUseId, input, onApprove, onApprov
         className="bg-card border border-border shadow-lg rounded-xl p-4 touch-pan-y"
       >
         <div className="font-semibold text-amber-400 mb-2 flex items-center gap-2"><Shield className="size-4" />Tool: {toolName}</div>
-        <div className="font-mono text-xs text-muted-foreground whitespace-pre-wrap max-h-[200px] overflow-y-auto mb-3">
-          {JSON.stringify(input, null, 2)}
-        </div>
+        <ToolInputDisplay toolName={toolName} input={input} />
         <div className="flex gap-2">
           <Button size="sm" onClick={() => onApprove(toolUseId)} className="h-10 bg-emerald-500 text-black hover:bg-emerald-400">Approve</Button>
           <Button size="sm" onClick={() => onApproveAlways(toolUseId)} className="h-10 bg-amber-400 text-black hover:bg-amber-300">Always Allow</Button>
@@ -222,9 +355,7 @@ export function ToolApproval({ toolName, toolUseId, input, onApprove, onApproveA
   return (
     <div className="p-4 mx-4 my-2 bg-card border border-border shadow-lg rounded-xl">
       <div className="font-semibold text-amber-400 mb-2 flex items-center gap-2"><Shield className="size-4" />Tool: {toolName}</div>
-      <div className="font-mono text-xs text-muted-foreground whitespace-pre-wrap max-h-[200px] overflow-y-auto mb-3">
-        {JSON.stringify(input, null, 2)}
-      </div>
+      <ToolInputDisplay toolName={toolName} input={input} />
       <div className="flex gap-2">
         <Button size="sm" onClick={() => onApprove(toolUseId)} className="h-10 bg-emerald-500 text-black hover:bg-emerald-400">Approve</Button>
         <Button size="sm" onClick={() => onApproveAlways(toolUseId)} className="h-10 bg-amber-400 text-black hover:bg-amber-300">Always Allow</Button>
