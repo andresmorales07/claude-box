@@ -252,7 +252,7 @@ The test server on port 9080 can serve CLI session history and test-provider ses
 ## Key Conventions
 
 - Feature branches must use the `feature/<branch-name>` naming convention
-- Version tags follow SemVer with a `v` prefix: `v<major>.<minor>.<patch>`. Bump MAJOR for breaking changes, MINOR for new features, PATCH for bug fixes. When creating a version tag, also update the `version` field in `server/package.json` (and regenerate `server/package-lock.json`) to match, then commit the bump *before* tagging.
+- Version tags follow SemVer with a `v` prefix: `v<major>.<minor>.<patch>`. Bump MAJOR for breaking changes, MINOR for new features, PATCH for bug fixes. Use the `/release` skill to cut a release — it handles the full sequence: bumping `server/package.json` and `server/package-lock.json`, rebuilding dist, committing, tagging, and pushing.
 - Container runs as `hatchpod` user (uid 1000) with passwordless sudo
 - Two Docker volumes: `home` (/home/hatchpod) and `docker-data` (/var/lib/docker)
 - s6-overlay v3 service types: `oneshot` for init, `longrun` for sshd/ttyd, `bundle` for user
