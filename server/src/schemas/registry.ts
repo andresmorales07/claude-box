@@ -1,8 +1,6 @@
 import { OpenAPIRegistry, OpenApiGeneratorV31 } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { SERVER_VERSION } from "../version.js";
 
 import { ErrorResponseSchema } from "./common.js";
 import { HealthResponseSchema } from "./health.js";
@@ -331,25 +329,13 @@ registry.registerPath({
 
 // ── Generate spec ──
 
-function readVersion(): string {
-  const __dirname = dirname(fileURLToPath(import.meta.url));
-  const pkgPath = join(__dirname, "..", "..", "package.json");
-  try {
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string };
-    return pkg.version;
-  } catch (err) {
-    console.warn("Failed to read version from package.json, using 0.0.0:", err);
-    return "0.0.0";
-  }
-}
-
 const generator = new OpenApiGeneratorV31(registry.definitions);
 
 export const openApiDocument = generator.generateDocument({
   openapi: "3.1.0",
   info: {
     title: "Hatchpod API",
-    version: readVersion(),
+    version: SERVER_VERSION,
     description:
       "REST API for managing Claude Code sessions, browsing the workspace, " +
       "and monitoring server health.\n\n" +

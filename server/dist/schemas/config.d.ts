@@ -3,6 +3,7 @@ import "./common.js";
 export declare const ConfigResponseSchema: z.ZodObject<{
     browseRoot: z.ZodString;
     defaultCwd: z.ZodString;
+    version: z.ZodString;
 }, z.core.$strip>;
 export declare const ProviderInfoSchema: z.ZodObject<{
     id: z.ZodString;

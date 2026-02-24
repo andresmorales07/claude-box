@@ -15,7 +15,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
-  const { sessions, activeSessionId, searchQuery, setActiveSession, setSearchQuery, fetchSessions, workspaceFilter } = useSessionsStore();
+  const { sessions, activeSessionId, searchQuery, version, setActiveSession, setSearchQuery, fetchSessions, workspaceFilter } = useSessionsStore();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -96,6 +96,9 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         <Button className="w-full" size="sm" onClick={() => navigate("/new")}>
           <Plus className="size-4 mr-2" /> New Session
         </Button>
+        {version && (
+          <p className="text-[0.6875rem] text-muted-foreground text-center mt-2">v{version}</p>
+        )}
       </div>
     </div>
   );

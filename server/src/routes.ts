@@ -11,6 +11,7 @@ import {
 } from "./sessions.js";
 import { listProviders, getProvider } from "./providers/index.js";
 import { CreateSessionRequestSchema, UuidSchema, isPathContained, openApiDocument } from "./schemas/index.js";
+import { SERVER_VERSION } from "./version.js";
 
 const startTime = Date.now();
 
@@ -297,7 +298,7 @@ export async function handleRequest(
   // GET /api/config — server configuration for the UI
   if (pathname === "/api/config" && method === "GET") {
     const defaultCwd = process.env.DEFAULT_CWD ?? process.cwd();
-    json(res, 200, { browseRoot: BROWSE_ROOT, defaultCwd });
+    json(res, 200, { browseRoot: BROWSE_ROOT, defaultCwd, version: SERVER_VERSION });
     return;
   }
 

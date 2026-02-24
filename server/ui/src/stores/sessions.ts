@@ -20,6 +20,7 @@ interface SessionsState {
   activeSessionId: string | null;
   cwd: string;
   browseRoot: string;
+  version: string;
   searchQuery: string;
   lastError: string | null;
   workspaceFilter: string | null;
@@ -41,6 +42,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   activeSessionId: null,
   cwd: "",
   browseRoot: "",
+  version: "",
   searchQuery: "",
   lastError: null,
   workspaceFilter: null,
@@ -60,7 +62,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       if (!res.ok) return;
       const config = await res.json();
       if (config?.browseRoot) {
-        set({ browseRoot: config.browseRoot });
+        set({ browseRoot: config.browseRoot, version: config.version ?? "" });
         if (!get().cwd) set({ cwd: config.defaultCwd ?? config.browseRoot });
       }
     } catch (err) {

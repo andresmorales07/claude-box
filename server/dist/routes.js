@@ -4,6 +4,7 @@ import { authenticateRequest, sendUnauthorized, sendRateLimited } from "./auth.j
 import { listSessionsWithHistory, getActiveSession, getSessionCount, createSession, deleteSession, } from "./sessions.js";
 import { listProviders, getProvider } from "./providers/index.js";
 import { CreateSessionRequestSchema, UuidSchema, isPathContained, openApiDocument } from "./schemas/index.js";
+import { SERVER_VERSION } from "./version.js";
 const startTime = Date.now();
 const SESSION_ID_RE = /^\/api\/sessions\/([0-9a-f-]{36})$/;
 const SESSION_HISTORY_RE = /^\/api\/sessions\/([0-9a-f-]{36})\/history$/;
@@ -268,7 +269,7 @@ export async function handleRequest(req, res) {
     // GET /api/config — server configuration for the UI
     if (pathname === "/api/config" && method === "GET") {
         const defaultCwd = process.env.DEFAULT_CWD ?? process.cwd();
-        json(res, 200, { browseRoot: BROWSE_ROOT, defaultCwd });
+        json(res, 200, { browseRoot: BROWSE_ROOT, defaultCwd, version: SERVER_VERSION });
         return;
     }
     // GET /api/providers — list registered providers

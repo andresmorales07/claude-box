@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Search } from "lucide-react";
 
 export function SessionListPage() {
-  const { sessions, activeSessionId, searchQuery, setActiveSession, setSearchQuery, fetchSessions, workspaceFilter } = useSessionsStore();
+  const { sessions, activeSessionId, searchQuery, version, setActiveSession, setSearchQuery, fetchSessions, workspaceFilter } = useSessionsStore();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -37,7 +37,10 @@ export function SessionListPage() {
   return (
     <div className="flex flex-col h-dvh">
       <header className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
-        <h1 className="text-lg font-bold text-primary flex-1">Hatchpod</h1>
+        <h1 className="text-lg font-bold text-primary flex-1">
+          Hatchpod
+          {version && <span className="text-xs font-normal text-muted-foreground ml-1.5">v{version}</span>}
+        </h1>
         <Button size="icon-sm" onClick={() => navigate("/new")}>
           <Plus className="size-5" />
         </Button>
