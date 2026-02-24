@@ -188,6 +188,17 @@ export class SessionWatcher {
             this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
             return;
         }
+        // Snapshot file size BEFORE reading so the byte offset stays aligned
+        // with what _parseAllMessages actually consumed (avoids TOCTOU race).
+        let preReplaySize = 0;
+        try {
+            const fileStat = await stat(watched.filePath);
+            preReplaySize = fileStat.size;
+        }
+        catch (err) {
+            if (err.code !== "ENOENT")
+                throw err;
+        }
         let result;
         try {
             result = await this.adapter.getMessages(sessionId, {
@@ -207,17 +218,11 @@ export class SessionWatcher {
         for (const msg of result.messages) {
             this.send(client, { type: "message", message: msg });
         }
-        // 2. Sync watcher state — advance byteOffset via file stat, messageIndex
-        //    from the adapter's totalMessages count. Only advance, never go backwards.
-        try {
-            const fileStat = await stat(watched.filePath);
-            if (fileStat.size > watched.byteOffset) {
-                watched.byteOffset = fileStat.size;
-            }
-        }
-        catch (err) {
-            if (err.code !== "ENOENT")
-                throw err;
+        // 2. Sync watcher state — advance byteOffset using the snapshot captured
+        //    before getMessages() read the file, so we don't skip bytes written
+        //    between the adapter read and this point.
+        if (preReplaySize > watched.byteOffset) {
+            watched.byteOffset = preReplaySize;
         }
         if (result.totalMessages > watched.messageIndex) {
             watched.messageIndex = result.totalMessages;

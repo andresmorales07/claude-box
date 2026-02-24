@@ -261,4 +261,12 @@ describe("GET /api/sessions/:id/messages — pagination", () => {
     const body = await res.json() as { error: string };
     expect(body.error).toBe("unknown provider");
   });
+
+  it("returns 400 for non-numeric before parameter", async () => {
+    const sid = randomUUID();
+    const res = await api(`/api/sessions/${sid}/messages?before=abc`);
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe("before must be a number");
+  });
 });

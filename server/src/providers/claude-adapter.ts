@@ -40,9 +40,12 @@ function normalizeAssistant(msg: SDKAssistantMessage, index: number, accumulated
   let hasNativeThinking = false;
   for (const block of content as ContentBlock[]) {
     switch (block.type) {
-      case "text":
-        if (block.text) parts.push({ type: "text", text: block.text });
+      case "text": {
+        if (!block.text) break;
+        const cleaned = cleanMessageText(block.text);
+        if (cleaned) parts.push({ type: "text", text: cleaned });
         break;
+      }
       case "tool_use":
         if (block.id && block.name) {
           parts.push({

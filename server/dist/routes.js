@@ -206,6 +206,10 @@ export async function handleRequest(req, res) {
         const beforeParam = url.searchParams.get("before");
         const limitParam = url.searchParams.get("limit");
         const before = beforeParam != null ? parseInt(beforeParam, 10) : undefined;
+        if (before !== undefined && Number.isNaN(before)) {
+            json(res, 400, { error: "before must be a number" });
+            return;
+        }
         const limit = limitParam != null ? parseInt(limitParam, 10) || 30 : undefined;
         try {
             const result = await adapter.getMessages(sessionId, { before, limit });

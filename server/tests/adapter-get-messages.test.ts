@@ -216,6 +216,71 @@ describe("ClaudeAdapter.getMessages", () => {
   });
 });
 
+describe("System tag cleanup on assistant text", () => {
+  it("strips system-reminder tags from assistant text in getMessages", async () => {
+    const sid = randomUUID();
+    const lines: string[] = [];
+    lines.push(JSON.stringify({
+      type: "progress", sessionId: sid,
+      cwd: "/home/user/workspace",
+      timestamp: "2026-02-20T10:00:00.000Z",
+    }));
+    lines.push(JSON.stringify({
+      type: "assistant", sessionId: sid,
+      message: {
+        role: "assistant", type: "message",
+        content: [{
+          type: "text",
+          text: "<system-reminder>Hook output</system-reminder>Here is the answer",
+        }],
+      },
+      timestamp: "2026-02-20T10:00:01.000Z",
+    }));
+    await writeFile(join(fakeProjectDir, `${sid}.jsonl`), lines.join("\n") + "\n");
+
+    const adapter = new ClaudeAdapter();
+    const result = await adapter.getMessages(sid);
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].parts[0]).toEqual({ type: "text", text: "Here is the answer" });
+  });
+
+  it("strips system tags from assistant text via normalizeFileLine", () => {
+    const adapter = new ClaudeAdapter();
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant", type: "message",
+        content: [{
+          type: "text",
+          text: "<fast_mode_info>\nFast mode info.\n</fast_mode_info>Clean response",
+        }],
+      },
+    });
+    const result = adapter.normalizeFileLine(line, 0);
+    expect(result).not.toBeNull();
+    expect(result!.parts[0]).toEqual({ type: "text", text: "Clean response" });
+  });
+
+  it("drops assistant text part that becomes empty after cleanup", () => {
+    const adapter = new ClaudeAdapter();
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant", type: "message",
+        content: [
+          { type: "text", text: "<system-reminder>only system tags</system-reminder>" },
+          { type: "text", text: "Visible text" },
+        ],
+      },
+    });
+    const result = adapter.normalizeFileLine(line, 0);
+    expect(result).not.toBeNull();
+    // Only the "Visible text" part should remain
+    expect(result!.parts).toHaveLength(1);
+    expect(result!.parts[0]).toEqual({ type: "text", text: "Visible text" });
+  });
+});
+
 describe("Tool summary attachment during normalization", () => {
   it("attaches summary to tool_use parts in getMessages output", async () => {
     const sid = randomUUID();
