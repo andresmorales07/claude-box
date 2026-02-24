@@ -1,5 +1,5 @@
 import type { ProviderAdapter } from "./providers/types.js";
-import type { ActiveSession, CreateSessionRequest, ServerMessage, SessionSummaryDTO } from "./types.js";
+import type { ActiveSession, CreateSessionRequest, SessionSummaryDTO } from "./types.js";
 import { SessionWatcher } from "./session-watcher.js";
 /**
  * Initialize the SessionWatcher singleton. Call once at server startup.
@@ -18,12 +18,6 @@ export declare function getSessionCount(): {
     active: number;
     total: number;
 };
-/**
- * Broadcast a ServerMessage to all WebSocket subscribers of a session
- * via the SessionWatcher. Used for status changes, approval requests,
- * and other runtime-only events that don't come from the JSONL file.
- */
-export declare function broadcastToSession(sessionId: string, msg: ServerMessage): void;
 export declare function createSession(req: CreateSessionRequest): Promise<{
     id: string;
     status: ActiveSession["status"];

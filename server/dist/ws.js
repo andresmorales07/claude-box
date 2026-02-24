@@ -54,20 +54,9 @@ export function handleWsConnection(ws, sessionId, ip) {
 function setupSessionConnection(ws, sessionId, messageLimit) {
     const watcher = getWatcher();
     const activeSession = getActiveSession(sessionId);
-    // For new API sessions, the SDK doesn't yield the initial user prompt as a
-    // message, and the JSONL file isn't findable yet (temp UUID). Send the stored
-    // prompt as a synthetic user message so the UI shows it immediately.
-    if (activeSession?.initialPrompt) {
-        const promptMsg = {
-            type: "message",
-            message: { role: "user", parts: [{ type: "text", text: activeSession.initialPrompt }], index: 0 },
-        };
-        ws.send(JSON.stringify(promptMsg));
-        // Clear so subsequent WS connections (reconnects) get it from the JSONL replay instead
-        activeSession.initialPrompt = null;
-    }
     // Subscribe to watcher for message replay + live streaming.
-    // This works for BOTH API sessions and CLI sessions.
+    // The watcher replays from in-memory messages[] (push-mode sessions)
+    // or from JSONL files (CLI/history sessions).
     watcher.subscribe(sessionId, ws, messageLimit).catch((err) => {
         console.error(`SessionWatcher subscribe failed for ${sessionId}:`, err);
         if (ws.readyState === 1) {
