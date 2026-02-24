@@ -61,8 +61,6 @@ let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let reconnectAttempts = 0;
 let thinkingStart: number | null = null;
 let currentSessionId: string | null = null;
-// Explicit flag to prevent connect() from wiping pre-seeded history messages
-let _resuming = false;
 // Set during session ID remap to prevent disconnect/connect from tearing down
 // the still-valid WebSocket connection during React navigation
 let _redirectingTo: string | null = null;
@@ -104,31 +102,27 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
     _redirectingTo = null;
     clearTimeout(_redirectTimeout);
 
-    const shouldPreserve = _resuming;
-    _resuming = false;
     get().disconnect();
     currentSessionId = sessionId;
 
-    if (!shouldPreserve) {
-      thinkingStart = null;
-      set({
-        messages: [],
-        status: "starting",
-        source: null,
-        connected: false,
-        pendingApproval: null,
-        slashCommands: [],
-        thinkingText: "",
-        thinkingStartTime: null,
-        thinkingDurations: {},
-        lastError: null,
-        hasOlderMessages: false,
-        loadingOlderMessages: false,
-        oldestLoadedIndex: 0,
-        totalMessageCount: 0,
-        serverTasks: [],
-      });
-    }
+    thinkingStart = null;
+    set({
+      messages: [],
+      status: "starting",
+      source: null,
+      connected: false,
+      pendingApproval: null,
+      slashCommands: [],
+      thinkingText: "",
+      thinkingStartTime: null,
+      thinkingDurations: {},
+      lastError: null,
+      hasOlderMessages: false,
+      loadingOlderMessages: false,
+      oldestLoadedIndex: 0,
+      totalMessageCount: 0,
+      serverTasks: [],
+    });
 
     const doConnect = () => {
       if (currentSessionId !== sessionId) return;
@@ -160,16 +154,8 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
               thinkingStart = null;
               set({ thinkingText: "", thinkingStartTime: null });
             }
-            // Deduplicate: skip if we already have a message with the same role+index.
-            // This prevents duplicates when the file-based watcher replays messages
-            // that were already delivered via direct broadcast.
-            set((s) => {
-              const isDuplicate = s.messages.some(
-                (existing) => existing.role === m.role && existing.index === m.index,
-              );
-              if (isDuplicate) return s;
-              return { messages: [...s.messages, m] };
-            });
+            // Server guarantees no duplicates — single delivery path via watcher.
+            set((s) => ({ messages: [...s.messages, m] }));
             break;
           }
           case "replay_complete": {
@@ -333,12 +319,11 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
 
   sendPrompt: (text) => {
     const state = get();
-    // CLI/history sessions — resume via REST then reconnect WS
+    // CLI/history sessions — resume via REST, server switches watcher to push mode
     if (state.source === "cli" && currentSessionId) {
       const { token } = useAuthStore.getState();
       const sessStore = useSessionsStore.getState();
       const cwd = sessStore.sessions.find(s => s.id === currentSessionId)?.cwd || sessStore.cwd;
-      const historyMessages = [...state.messages];
       const historyId = currentSessionId;
       const expectedSessionId = currentSessionId;
 
@@ -371,15 +356,11 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
           }
           if (res.status === 401) { useAuthStore.getState().logout(); return; }
           if (res.ok) {
-            const session = await res.json();
-            set({ source: "api" }); // Now interactive
-            sessStore.setActiveSession(session.id);
+            // Server creates the session with the same ID (resumeSessionId),
+            // switches the watcher to push mode, and pushes messages through
+            // the existing WS subscription. Just update source to interactive.
+            set({ source: "api" });
             sessStore.fetchSessions();
-            // Pre-seed with history messages, then connect WS for new messages
-            _resuming = true;
-            set({ messages: historyMessages, status: "starting" });
-            currentSessionId = session.id;
-            get().connect(session.id);
           } else {
             const errBody = await res.json().catch(() => null);
             set({ lastError: errBody?.error ?? `Failed to resume session (${res.status})`, status: "error" });

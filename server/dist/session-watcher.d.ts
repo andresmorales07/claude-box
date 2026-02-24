@@ -1,25 +1,36 @@
 import type { WebSocket } from "ws";
-import type { ProviderAdapter } from "./providers/types.js";
+import type { ProviderAdapter, NormalizedMessage } from "./providers/types.js";
 import type { ServerMessage } from "./types.js";
 /**
- * Tails JSONL session files on disk and broadcasts normalized messages
- * to subscribed WebSocket clients. A single polling interval checks all
- * watched sessions — no per-session timers.
+ * Session delivery mode.
+ * - "push": runSession() pushes messages via pushMessage(). No file polling.
+ * - "poll": File-based JSONL tailing. Used for CLI/external sessions.
+ * - "idle": Default state. No active delivery mechanism.
+ */
+type SessionMode = "push" | "poll" | "idle";
+/**
+ * Central message router for all session types. Stores messages in-memory,
+ * replays to new subscribers, and broadcasts live updates.
+ *
+ * Two delivery modes:
+ * - **Push mode** — `runSession()` calls `pushMessage()` for each SDK-yielded
+ *   message. Messages are stored in `messages[]` and broadcast to clients.
+ * - **Poll mode** — A 200ms interval tails JSONL files on disk for CLI/external
+ *   sessions. Discovered messages are stored in `messages[]` and broadcast.
+ *
+ * Subscribers always receive history from in-memory `messages[]` first,
+ * falling back to JSONL file replay only when no in-memory data exists.
  */
 export declare class SessionWatcher {
     private adapter;
     private sessions;
     private intervalHandle;
-    /** Session IDs whose polling is suppressed (runSession broadcasts directly). */
-    private suppressedIds;
     constructor(adapter: ProviderAdapter);
     /** Number of sessions currently being watched. */
     get watchedCount(): number;
-    /** Return the current message index for a session (i.e. how many messages have been seen). */
-    getMessageIndex(sessionId: string): number;
     /**
      * Subscribe a WebSocket client to a session.
-     * Replays existing messages from the JSONL file, then streams new ones.
+     * Replays existing messages (from memory or JSONL file), then streams new ones.
      */
     subscribe(sessionId: string, client: WebSocket, messageLimit?: number): Promise<void>;
     /**
@@ -33,42 +44,55 @@ export declare class SessionWatcher {
      */
     remap(oldId: string, newId: string): void;
     /**
-     * Suppress file-based polling for a session. Used by runSession() to
-     * prevent the watcher from delivering messages that are already being
-     * broadcast directly. The session entry is created if it doesn't exist.
+     * Push a message into a session's in-memory store and broadcast to all
+     * subscribed clients. The message index is derived from `messages.length`
+     * — the single authority for indexing.
+     *
+     * Only operates in "push" mode. No-ops if the session doesn't exist or
+     * isn't in push mode.
      */
-    suppressPolling(sessionId: string): void;
+    pushMessage(sessionId: string, message: NormalizedMessage): void;
     /**
-     * Re-enable file-based polling for a session.
+     * Broadcast an ephemeral event to all subscribers of a session.
+     * Unlike pushMessage(), this does NOT store the event in messages[] —
+     * used for status changes, thinking deltas, approval requests, etc.
      */
-    unsuppressPolling(sessionId: string): void;
+    pushEvent(sessionId: string, event: ServerMessage): void;
     /**
-     * Advance a session's byteOffset to the current file size so the next
-     * poll doesn't replay already-delivered messages. Called after runSession()
-     * completes and the session is remapped to its provider ID.
+     * Set the delivery mode for a session. Creates the WatchedSession entry
+     * if it doesn't exist yet (needed when runSession starts before WS connects).
      */
-    syncOffsetToEnd(sessionId: string): Promise<void>;
+    setMode(sessionId: string, mode: SessionMode): void;
+    /**
+     * Transition a session from push mode to poll mode. Resolves the JSONL file
+     * path and advances the byte offset to EOF so polling only picks up new data
+     * written after this point.
+     *
+     * This is a single atomic operation that replaces the old 3-step dance of
+     * suppressPolling → syncOffsetToEnd → unsuppressPolling.
+     */
+    transitionToPoll(sessionId: string): Promise<void>;
     /** Start the global poll loop. Call once at server startup. */
     start(intervalMs?: number): void;
     /** Stop polling. Call on server shutdown. */
     stop(): void;
     /**
-     * Replay messages to a single client via adapter.getMessages(), then
+     * Replay messages from in-memory store to a single client. Supports
+     * pagination via messageLimit (returns the most recent N messages).
+     */
+    private replayFromMemory;
+    /**
+     * Replay messages from JSONL file via adapter.getMessages(), then
      * sync watcher state and send replay_complete.
      */
-    private replayToClient;
+    private replayFromFile;
     /** Single poll cycle: check all watched sessions for new data. */
     private poll;
     /** Poll a single session for new data. */
     private pollSession;
     /** Send a message to a single WebSocket client. */
     private send;
-    /**
-     * Broadcast a ServerMessage to all subscribed clients of a session.
-     * Used by sessions.ts to push status/approval updates through the
-     * watcher's centralized client tracking.
-     */
-    broadcastToSubscribers(sessionId: string, msg: ServerMessage): void;
     /** Broadcast a message to all clients of a watched session. */
     private broadcast;
 }
+export {};

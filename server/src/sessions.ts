@@ -1,6 +1,6 @@
 import { getProvider } from "./providers/index.js";
 import type { ProviderAdapter, NormalizedMessage, ProviderSessionResult, PermissionModeCommon } from "./providers/types.js";
-import type { ActiveSession, CreateSessionRequest, ServerMessage, SessionSummaryDTO } from "./types.js";
+import type { ActiveSession, CreateSessionRequest, SessionSummaryDTO } from "./types.js";
 import { SessionWatcher } from "./session-watcher.js";
 import { randomUUID } from "node:crypto";
 
@@ -150,19 +150,6 @@ export function getSessionCount(): { active: number; total: number } {
   return { active, total: sessions.size };
 }
 
-/**
- * Broadcast a ServerMessage to all WebSocket subscribers of a session
- * via the SessionWatcher. Used for status changes, approval requests,
- * and other runtime-only events that don't come from the JSONL file.
- */
-export function broadcastToSession(sessionId: string, msg: ServerMessage): void {
-  if (!watcher) {
-    console.error(`broadcastToSession(${sessionId}): watcher not initialized — message dropped`);
-    return;
-  }
-  watcher.broadcastToSubscribers(sessionId, msg);
-}
-
 export async function createSession(
   req: CreateSessionRequest,
 ): Promise<{ id: string; status: ActiveSession["status"] }> {
@@ -190,7 +177,6 @@ export async function createSession(
     alwaysAllowedTools: new Set<string>(),
     status: hasPrompt ? "starting" : "idle",
     lastError: null,
-    initialPrompt: hasPrompt && !req.resumeSessionId ? req.prompt! : null,
   };
 
   sessions.set(id, session);
@@ -212,9 +198,18 @@ async function runSession(
   allowedTools?: string[],
   resumeSessionId?: string,
 ): Promise<void> {
+  if (!watcher) {
+    console.error(`runSession(${session.sessionId}): watcher not initialized`);
+    return;
+  }
+
   try {
     session.status = "running";
-    broadcastToSession(session.sessionId, { type: "status", status: "running" });
+
+    // Enter push mode — the watcher stores messages and broadcasts to WS clients.
+    // Creates the WatchedSession entry if no client has subscribed yet.
+    watcher.setMode(session.sessionId, "push");
+    watcher.pushEvent(session.sessionId, { type: "status", status: "running" });
 
     const adapter = getProvider(session.provider);
     const generator = adapter.run({
@@ -238,11 +233,11 @@ async function runSession(
             resolve,
           };
           session.status = "waiting_for_approval";
-          broadcastToSession(session.sessionId, {
+          watcher!.pushEvent(session.sessionId, {
             type: "status",
             status: "waiting_for_approval",
           });
-          broadcastToSession(session.sessionId, {
+          watcher!.pushEvent(session.sessionId, {
             type: "tool_approval_request",
             toolName: request.toolName,
             toolUseId: request.toolUseId,
@@ -251,49 +246,29 @@ async function runSession(
         });
       },
       onThinkingDelta: (text: string) => {
-        broadcastToSession(session.sessionId, { type: "thinking_delta", text });
+        watcher!.pushEvent(session.sessionId, { type: "thinking_delta", text });
       },
     });
 
-    // Suppress file-based polling for this session while we're running.
-    // We broadcast messages directly below (lower latency than the 200ms poll).
-    // Without this, the watcher would also pick up the same messages from the
-    // JSONL file and broadcast them a second time → duplicate messages.
-    if (watcher) watcher.suppressPolling(session.sessionId);
-
-    // The SDK doesn't yield the user prompt back from the iterator — it's
-    // the input to sdkQuery(). Broadcast a synthetic user message so
-    // connected clients see the prompt in the chat immediately.
-    //
-    // For new sessions created via REST (NewSessionPage), the WS client
-    // hasn't connected yet — ws.ts sends the prompt on WS connect via
-    // initialPrompt. The dedup logic in the UI (role + index) prevents
-    // the duplicate when this broadcast also arrives.
-    //
-    // For follow-up messages (resumeSessionId is set), the WS client IS
-    // already connected, so this broadcast is the only way the user prompt
-    // reaches the UI during the live session. We use the watcher's current
-    // messageIndex so the index doesn't collide with already-replayed messages.
-    {
-      const promptIndex = watcher ? watcher.getMessageIndex(session.sessionId) : 0;
-      broadcastToSession(session.sessionId, {
-        type: "message",
-        message: { role: "user", parts: [{ type: "text", text: prompt }], index: promptIndex },
-      });
-    }
+    // Push the user prompt as a message. The watcher stores it in messages[]
+    // so it's available for replay when the WS client connects (no initialPrompt needed).
+    watcher.pushMessage(session.sessionId, {
+      role: "user",
+      parts: [{ type: "text", text: prompt }],
+      index: 0, // Will be overwritten by pushMessage() to messages.length
+    });
 
     // Manual iteration: we need the generator's return value (ProviderSessionResult)
     // which for-await discards.
     let result: IteratorResult<NormalizedMessage, ProviderSessionResult>;
     while (!(result = await generator.next()).done) {
       // Intercept system_init messages — broadcast slash commands separately.
-      // These are runtime-only events that don't appear in the JSONL file.
       if (result.value.role === "system" && "event" in result.value && result.value.event.type === "system_init") {
-        broadcastToSession(session.sessionId, { type: "slash_commands", commands: result.value.event.slashCommands });
+        watcher.pushEvent(session.sessionId, { type: "slash_commands", commands: result.value.event.slashCommands });
         continue;
       }
-      // Broadcast the message directly for live WebSocket clients.
-      broadcastToSession(session.sessionId, { type: "message", message: result.value });
+      // Store + broadcast each SDK message via the watcher.
+      watcher.pushMessage(session.sessionId, result.value);
     }
 
     const sessionResult = result.value;
@@ -307,35 +282,25 @@ async function runSession(
       sessions.delete(oldId);
       sessions.set(session.sessionId, session);
       sessionAliases.set(oldId, session.sessionId);
-      if (!watcher) {
-        console.error(`Session remap: watcher not initialized, clients will not receive updates`);
-      } else {
-        // Remap the watcher entry, sync offset to EOF, THEN unsuppress polling.
-        // Order matters: syncOffsetToEnd must complete before polling resumes,
-        // otherwise the watcher re-reads the JSONL from offset 0 and broadcasts
-        // every message that was already delivered directly → duplicates.
-        watcher.remap(oldId, session.sessionId);
-        try {
-          await watcher.syncOffsetToEnd(session.sessionId);
-        } catch (err) {
-          console.warn(`Failed to sync watcher offset for ${session.sessionId}:`, err);
-        }
-        watcher.unsuppressPolling(session.sessionId);
+      // Remap the watcher entry then transition to poll mode (one atomic step
+      // replaces the old remap → syncOffset → unsuppress dance).
+      watcher.remap(oldId, session.sessionId);
+      try {
+        await watcher.transitionToPoll(session.sessionId);
+      } catch (err) {
+        console.warn(`Failed to transition watcher to poll for ${session.sessionId}:`, err);
       }
-      broadcastToSession(session.sessionId, {
+      watcher.pushEvent(session.sessionId, {
         type: "session_redirected",
         newSessionId: session.sessionId,
       });
-    } else if (watcher) {
-      // No remap needed (e.g., resumed session) — sync offset to EOF first,
-      // THEN unsuppress polling. Without this ordering, the watcher can poll
-      // before the offset is advanced and re-broadcast already-delivered messages.
+    } else {
+      // No remap needed (e.g., resumed session) — transition to poll.
       try {
-        await watcher.syncOffsetToEnd(session.sessionId);
+        await watcher.transitionToPoll(session.sessionId);
       } catch (err) {
-        console.warn(`Failed to sync watcher offset for ${session.sessionId}:`, err);
+        console.warn(`Failed to transition watcher to poll for ${session.sessionId}:`, err);
       }
-      watcher.unsuppressPolling(session.sessionId);
     }
 
     // Status may have been mutated externally by interruptSession()
@@ -344,14 +309,10 @@ async function runSession(
       session.status = "completed";
     }
   } catch (err) {
-    // Ensure polling is unsuppressed on error so the watcher can take over.
-    // Sync offset first to prevent re-broadcast of already-delivered messages.
-    if (watcher) {
-      try {
-        await watcher.syncOffsetToEnd(session.sessionId);
-      } catch { /* best-effort on error path */ }
-      watcher.unsuppressPolling(session.sessionId);
-    }
+    // Transition to poll on error so the watcher can take over.
+    try {
+      await watcher.transitionToPoll(session.sessionId);
+    } catch { /* best-effort on error path */ }
 
     const currentStatus = session.status as ActiveSession["status"];
     const isAbortError = session.abortController.signal.aborted;
@@ -367,7 +328,7 @@ async function runSession(
     }
   }
 
-  broadcastToSession(session.sessionId, {
+  watcher.pushEvent(session.sessionId, {
     type: "status",
     status: session.status,
     ...(session.lastError ? { error: session.lastError } : {}),
@@ -381,7 +342,7 @@ export function interruptSession(id: string): boolean {
   if (!session) return false;
   session.status = "interrupted";
   session.abortController.abort();
-  broadcastToSession(session.sessionId, { type: "status", status: "interrupted" });
+  watcher?.pushEvent(session.sessionId, { type: "status", status: "interrupted" });
   return true;
 }
 
@@ -422,7 +383,7 @@ export function handleApproval(
   const approval = session.pendingApproval;
   session.pendingApproval = null;
   session.status = "running";
-  broadcastToSession(session.sessionId, { type: "status", status: "running" });
+  watcher?.pushEvent(session.sessionId, { type: "status", status: "running" });
 
   if (allow) {
     if (alwaysAllow) {

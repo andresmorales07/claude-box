@@ -1,15 +1,21 @@
-import { open, stat, readFile } from "node:fs/promises";
+import { open, stat } from "node:fs/promises";
 /**
- * Tails JSONL session files on disk and broadcasts normalized messages
- * to subscribed WebSocket clients. A single polling interval checks all
- * watched sessions — no per-session timers.
+ * Central message router for all session types. Stores messages in-memory,
+ * replays to new subscribers, and broadcasts live updates.
+ *
+ * Two delivery modes:
+ * - **Push mode** — `runSession()` calls `pushMessage()` for each SDK-yielded
+ *   message. Messages are stored in `messages[]` and broadcast to clients.
+ * - **Poll mode** — A 200ms interval tails JSONL files on disk for CLI/external
+ *   sessions. Discovered messages are stored in `messages[]` and broadcast.
+ *
+ * Subscribers always receive history from in-memory `messages[]` first,
+ * falling back to JSONL file replay only when no in-memory data exists.
  */
 export class SessionWatcher {
     adapter;
     sessions = new Map();
     intervalHandle = null;
-    /** Session IDs whose polling is suppressed (runSession broadcasts directly). */
-    suppressedIds = new Set();
     constructor(adapter) {
         this.adapter = adapter;
     }
@@ -17,41 +23,39 @@ export class SessionWatcher {
     get watchedCount() {
         return this.sessions.size;
     }
-    /** Return the current message index for a session (i.e. how many messages have been seen). */
-    getMessageIndex(sessionId) {
-        return this.sessions.get(sessionId)?.messageIndex ?? 0;
-    }
+    // ── Client management ──
     /**
      * Subscribe a WebSocket client to a session.
-     * Replays existing messages from the JSONL file, then streams new ones.
+     * Replays existing messages (from memory or JSONL file), then streams new ones.
      */
     async subscribe(sessionId, client, messageLimit) {
         let watched = this.sessions.get(sessionId);
         if (watched) {
-            // Session already being watched — add client and replay from file
             watched.clients.add(client);
-            // Re-resolve file path if it was null at initial subscribe time
-            // (e.g., session was created with a temp UUID then remapped)
-            if (!watched.filePath) {
-                const filePath = await this.adapter.getSessionFilePath(sessionId);
-                if (filePath) {
-                    watched.filePath = filePath;
-                }
+            // Replay from best available source
+            if (watched.messages.length > 0) {
+                this.replayFromMemory(watched, client, messageLimit);
             }
-            await this.replayToClient(sessionId, watched, client, messageLimit);
+            else {
+                // Re-resolve file path if it was null at initial subscribe time
+                if (!watched.filePath) {
+                    const filePath = await this.adapter.getSessionFilePath(sessionId);
+                    if (filePath)
+                        watched.filePath = filePath;
+                }
+                await this.replayFromFile(sessionId, watched, client, messageLimit);
+            }
             return;
         }
         // Create the entry IMMEDIATELY (before any await) to prevent race
-        // conditions when multiple clients subscribe concurrently. Without
-        // this, both calls see sessions.get() as undefined, both take this
-        // branch, and the second overwrites the first — losing a client.
+        // conditions when multiple clients subscribe concurrently.
         watched = {
+            messages: [],
+            clients: new Set([client]),
+            mode: "idle",
             filePath: null,
             byteOffset: 0,
             lineBuffer: "",
-            messageIndex: 0,
-            clients: new Set([client]),
-            pollingSuppressed: this.suppressedIds.has(sessionId),
         };
         this.sessions.set(sessionId, watched);
         // Resolve file path via adapter (async)
@@ -60,9 +64,8 @@ export class SessionWatcher {
             this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
             return;
         }
-        // Got a file path — update the entry and replay existing content
         watched.filePath = filePath;
-        await this.replayToClient(sessionId, watched, client, messageLimit);
+        await this.replayFromFile(sessionId, watched, client, messageLimit);
     }
     /**
      * Unsubscribe a client from a session.
@@ -102,36 +105,64 @@ export class SessionWatcher {
         this.sessions.delete(oldId);
         this.sessions.set(newId, watched);
     }
+    // ── Message production ──
     /**
-     * Suppress file-based polling for a session. Used by runSession() to
-     * prevent the watcher from delivering messages that are already being
-     * broadcast directly. The session entry is created if it doesn't exist.
+     * Push a message into a session's in-memory store and broadcast to all
+     * subscribed clients. The message index is derived from `messages.length`
+     * — the single authority for indexing.
+     *
+     * Only operates in "push" mode. No-ops if the session doesn't exist or
+     * isn't in push mode.
      */
-    suppressPolling(sessionId) {
+    pushMessage(sessionId, message) {
         const watched = this.sessions.get(sessionId);
-        if (watched) {
-            watched.pollingSuppressed = true;
-        }
-        // If no entry yet, it'll be created when subscribe() is called —
-        // we store the flag for later in case subscribe comes after this call.
-        this.suppressedIds.add(sessionId);
+        if (!watched || watched.mode !== "push")
+            return;
+        const indexed = { ...message, index: watched.messages.length };
+        watched.messages.push(indexed);
+        this.broadcast(watched, { type: "message", message: indexed });
     }
     /**
-     * Re-enable file-based polling for a session.
+     * Broadcast an ephemeral event to all subscribers of a session.
+     * Unlike pushMessage(), this does NOT store the event in messages[] —
+     * used for status changes, thinking deltas, approval requests, etc.
      */
-    unsuppressPolling(sessionId) {
-        this.suppressedIds.delete(sessionId);
+    pushEvent(sessionId, event) {
         const watched = this.sessions.get(sessionId);
-        if (watched) {
-            watched.pollingSuppressed = false;
+        if (!watched)
+            return;
+        this.broadcast(watched, event);
+    }
+    /**
+     * Set the delivery mode for a session. Creates the WatchedSession entry
+     * if it doesn't exist yet (needed when runSession starts before WS connects).
+     */
+    setMode(sessionId, mode) {
+        let watched = this.sessions.get(sessionId);
+        if (!watched) {
+            watched = {
+                messages: [],
+                clients: new Set(),
+                mode,
+                filePath: null,
+                byteOffset: 0,
+                lineBuffer: "",
+            };
+            this.sessions.set(sessionId, watched);
+        }
+        else {
+            watched.mode = mode;
         }
     }
     /**
-     * Advance a session's byteOffset to the current file size so the next
-     * poll doesn't replay already-delivered messages. Called after runSession()
-     * completes and the session is remapped to its provider ID.
+     * Transition a session from push mode to poll mode. Resolves the JSONL file
+     * path and advances the byte offset to EOF so polling only picks up new data
+     * written after this point.
+     *
+     * This is a single atomic operation that replaces the old 3-step dance of
+     * suppressPolling → syncOffsetToEnd → unsuppressPolling.
      */
-    async syncOffsetToEnd(sessionId) {
+    async transitionToPoll(sessionId) {
         const watched = this.sessions.get(sessionId);
         if (!watched)
             return;
@@ -141,29 +172,21 @@ export class SessionWatcher {
             if (filePath)
                 watched.filePath = filePath;
         }
-        if (!watched.filePath)
-            return;
-        try {
-            // Read the full file to count normalized messages (for correct messageIndex)
-            // and advance byteOffset to EOF so future polls only see new data.
-            const content = await readFile(watched.filePath, "utf-8");
-            watched.byteOffset = Buffer.byteLength(content, "utf-8");
-            watched.lineBuffer = "";
-            let idx = 0;
-            for (const line of content.split("\n")) {
-                if (!line.trim())
-                    continue;
-                if (this.adapter.normalizeFileLine(line, idx))
-                    idx++;
+        // Advance byteOffset to EOF so polling only sees new data
+        if (watched.filePath) {
+            try {
+                const fileStat = await stat(watched.filePath);
+                watched.byteOffset = fileStat.size;
             }
-            if (idx > watched.messageIndex)
-                watched.messageIndex = idx;
+            catch (err) {
+                if (err.code !== "ENOENT")
+                    throw err;
+            }
         }
-        catch (err) {
-            if (err.code !== "ENOENT")
-                throw err;
-        }
+        watched.lineBuffer = "";
+        watched.mode = "poll";
     }
+    // ── Lifecycle ──
     /** Start the global poll loop. Call once at server startup. */
     start(intervalMs = 200) {
         if (this.intervalHandle)
@@ -183,10 +206,31 @@ export class SessionWatcher {
     }
     // ── Private methods ──
     /**
-     * Replay messages to a single client via adapter.getMessages(), then
+     * Replay messages from in-memory store to a single client. Supports
+     * pagination via messageLimit (returns the most recent N messages).
+     */
+    replayFromMemory(watched, client, messageLimit) {
+        const allMessages = watched.messages;
+        const total = allMessages.length;
+        // Apply limit: take the most recent N messages
+        const limit = messageLimit && messageLimit > 0 ? messageLimit : total;
+        const startIdx = Math.max(0, total - limit);
+        const page = allMessages.slice(startIdx);
+        const oldestIndex = page.length > 0 ? page[0].index : 0;
+        for (const msg of page) {
+            this.send(client, { type: "message", message: msg });
+        }
+        this.send(client, {
+            type: "replay_complete",
+            totalMessages: total,
+            oldestIndex,
+        });
+    }
+    /**
+     * Replay messages from JSONL file via adapter.getMessages(), then
      * sync watcher state and send replay_complete.
      */
-    async replayToClient(sessionId, watched, client, messageLimit) {
+    async replayFromFile(sessionId, watched, client, messageLimit) {
         // No file to replay (e.g., test adapter) — just signal replay is done
         if (!watched.filePath) {
             this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
@@ -218,18 +262,19 @@ export class SessionWatcher {
             this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
             throw err;
         }
-        // 1. Send messages to the client
+        // 1. Send messages to the client and populate in-memory store
         for (const msg of result.messages) {
             this.send(client, { type: "message", message: msg });
+            // Populate messages[] for future reconnects (only if empty to avoid duplication)
+            if (watched.messages.length === 0 || watched.messages[watched.messages.length - 1].index < msg.index) {
+                watched.messages.push(msg);
+            }
         }
         // 2. Sync watcher state — advance byteOffset using the snapshot captured
         //    before getMessages() read the file, so we don't skip bytes written
         //    between the adapter read and this point.
         if (preReplaySize > watched.byteOffset) {
             watched.byteOffset = preReplaySize;
-        }
-        if (result.totalMessages > watched.messageIndex) {
-            watched.messageIndex = result.totalMessages;
         }
         watched.lineBuffer = "";
         // 3. Send tasks if any non-completed tasks exist
@@ -266,13 +311,11 @@ export class SessionWatcher {
     }
     /** Poll a single session for new data. */
     async pollSession(sessionId, watched) {
-        // Skip polling for sessions where runSession() broadcasts directly.
-        if (watched.pollingSuppressed)
+        // Only poll sessions in poll mode
+        if (watched.mode !== "poll")
             return;
         if (!watched.filePath) {
-            // File path wasn't available at subscribe time (e.g., session created
-            // via API with a temp UUID, then remapped to the CLI session ID).
-            // Try to resolve it now — the JSONL file may exist under the new ID.
+            // File path wasn't available at subscribe time — try to resolve now
             const filePath = await this.adapter.getSessionFilePath(sessionId);
             if (filePath) {
                 watched.filePath = filePath;
@@ -288,7 +331,6 @@ export class SessionWatcher {
         }
         catch (err) {
             if (err.code === "ENOENT") {
-                // File doesn't exist yet — nothing to do
                 return;
             }
             throw err;
@@ -317,10 +359,11 @@ export class SessionWatcher {
         for (const line of segments) {
             if (!line.trim())
                 continue;
-            const normalized = this.adapter.normalizeFileLine(line, watched.messageIndex);
+            const normalized = this.adapter.normalizeFileLine(line, watched.messages.length);
             if (normalized) {
-                watched.messageIndex++;
-                this.broadcast(watched, { type: "message", message: normalized });
+                const indexed = { ...normalized, index: watched.messages.length };
+                watched.messages.push(indexed);
+                this.broadcast(watched, { type: "message", message: indexed });
             }
         }
     }
@@ -334,17 +377,6 @@ export class SessionWatcher {
         catch (err) {
             console.warn("SessionWatcher: failed to send to client:", err.message);
         }
-    }
-    /**
-     * Broadcast a ServerMessage to all subscribed clients of a session.
-     * Used by sessions.ts to push status/approval updates through the
-     * watcher's centralized client tracking.
-     */
-    broadcastToSubscribers(sessionId, msg) {
-        const watched = this.sessions.get(sessionId);
-        if (!watched)
-            return;
-        this.broadcast(watched, msg);
     }
     /** Broadcast a message to all clients of a watched session. */
     broadcast(watched, msg) {
