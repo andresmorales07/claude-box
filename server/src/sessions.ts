@@ -104,9 +104,11 @@ export async function listSessionsWithHistory(cwd?: string): Promise<SessionSumm
     }
   }
 
-  // Add history-only sessions (not already live)
+  // Add history-only sessions (not already live, dedup across project dirs)
+  const seenIds = new Set(liveProviderIds);
   for (const h of history) {
-    if (liveProviderIds.has(h.id)) continue;
+    if (seenIds.has(h.id)) continue;
+    seenIds.add(h.id);
     liveSessions.push({
       id: h.id,
       status: "history",

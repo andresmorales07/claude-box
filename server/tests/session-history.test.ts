@@ -177,6 +177,137 @@ describe("session-history", () => {
       // No entry for the txt file or subdir
       expect(result.every((s) => s.id !== "not-a-session")).toBe(true);
     });
+
+    it("skips XML-looking messages for summary extraction", async () => {
+      const sid = randomUUID();
+      const lines = [
+        JSON.stringify({
+          type: "progress",
+          sessionId: sid,
+          slug: "xml-skip-test",
+          cwd: fakeCwd,
+          timestamp: "2026-02-20T10:00:00.000Z",
+        }),
+        JSON.stringify({
+          type: "user",
+          sessionId: sid,
+          cwd: fakeCwd,
+          timestamp: "2026-02-20T10:00:01.000Z",
+          message: { role: "user", content: "<system-reminder>This is system context</system-reminder>" },
+        }),
+      ].join("\n") + "\n";
+      await writeFile(join(fakeProjectDir, `${sid}.jsonl`), lines);
+
+      const result = await listSessionHistory(fakeCwd);
+      const found = result.find((s) => s.id === sid);
+      expect(found).toBeDefined();
+      expect(found!.summary).toBeNull();
+    });
+
+    it("uses second message for summary when first starts with <", async () => {
+      const sid = randomUUID();
+      const lines = [
+        JSON.stringify({
+          type: "progress",
+          sessionId: sid,
+          slug: "xml-fallback-test",
+          cwd: fakeCwd,
+          timestamp: "2026-02-20T10:00:00.000Z",
+        }),
+        JSON.stringify({
+          type: "user",
+          sessionId: sid,
+          cwd: fakeCwd,
+          timestamp: "2026-02-20T10:00:01.000Z",
+          message: { role: "user", content: "<system-reminder>skip me</system-reminder>" },
+        }),
+        JSON.stringify({
+          type: "user",
+          sessionId: sid,
+          cwd: fakeCwd,
+          timestamp: "2026-02-20T10:00:02.000Z",
+          message: { role: "user", content: "Fix the login bug" },
+        }),
+      ].join("\n") + "\n";
+      await writeFile(join(fakeProjectDir, `${sid}.jsonl`), lines);
+
+      const result = await listSessionHistory(fakeCwd);
+      const found = result.find((s) => s.id === sid);
+      expect(found!.summary).toBe("Fix the login bug");
+    });
+
+    it("collapses newlines in summary", async () => {
+      const sid = randomUUID();
+      const content = makeJsonl(sid, { userMessage: "Fix\n\nthe\nlogin\nbug" });
+      await writeFile(join(fakeProjectDir, `${sid}.jsonl`), content);
+
+      const result = await listSessionHistory(fakeCwd);
+      const found = result.find((s) => s.id === sid);
+      expect(found!.summary).toBe("Fix the login bug");
+    });
+
+    it("uses first JSONL timestamp for createdAt", async () => {
+      const sid = randomUUID();
+      const content = makeJsonl(sid, {
+        slug: "ts-test",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      });
+      await writeFile(join(fakeProjectDir, `${sid}.jsonl`), content);
+
+      const result = await listSessionHistory(fakeCwd);
+      const found = result.find((s) => s.id === sid);
+      expect(found!.createdAt.toISOString()).toBe("2026-01-01T00:00:00.000Z");
+    });
+
+    it("falls back to mtime for createdAt when no timestamp field", async () => {
+      const sid = randomUUID();
+      const lines = [
+        JSON.stringify({
+          type: "progress",
+          sessionId: sid,
+          slug: "no-ts",
+          cwd: fakeCwd,
+          // No timestamp field
+        }),
+      ].join("\n") + "\n";
+      const filePath = join(fakeProjectDir, `${sid}.jsonl`);
+      await writeFile(filePath, lines);
+
+      const knownDate = new Date("2026-03-01T12:00:00.000Z");
+      await utimes(filePath, knownDate, knownDate);
+
+      const result = await listSessionHistory(fakeCwd);
+      const found = result.find((s) => s.id === sid);
+      expect(found!.createdAt.getTime()).toBe(knownDate.getTime());
+    });
+
+    it("skips non-UUID .jsonl filenames", async () => {
+      await writeFile(join(fakeProjectDir, "not-a-uuid.jsonl"), '{"type":"progress"}\n');
+
+      const result = await listSessionHistory(fakeCwd);
+      expect(result.every((s) => s.id !== "not-a-uuid")).toBe(true);
+    });
+
+    it("refreshes cache when file mtime changes", async () => {
+      const sid = randomUUID();
+      const filePath = join(fakeProjectDir, `${sid}.jsonl`);
+
+      // Write initial content
+      await writeFile(filePath, makeJsonl(sid, { slug: "original-slug" }));
+      const date1 = new Date("2026-01-10T00:00:00.000Z");
+      await utimes(filePath, date1, date1);
+
+      const result1 = await listSessionHistory(fakeCwd);
+      expect(result1.find((s) => s.id === sid)!.slug).toBe("original-slug");
+
+      // Rewrite with different content AND new mtime
+      await writeFile(filePath, makeJsonl(sid, { slug: "updated-slug" }));
+      const date2 = new Date("2026-01-11T00:00:00.000Z");
+      await utimes(filePath, date2, date2);
+
+      const result2 = await listSessionHistory(fakeCwd);
+      expect(result2.find((s) => s.id === sid)!.slug).toBe("updated-slug");
+    });
   });
 
   describe("findSessionFile", () => {
@@ -192,6 +323,13 @@ describe("session-history", () => {
     it("returns null for nonexistent session ID", async () => {
       const result = await findSessionFile(randomUUID());
       expect(result).toBeNull();
+    });
+
+    it("rejects non-UUID input", async () => {
+      expect(await findSessionFile("")).toBeNull();
+      expect(await findSessionFile("not-a-uuid")).toBeNull();
+      expect(await findSessionFile("../../etc/passwd")).toBeNull();
+      expect(await findSessionFile("abc")).toBeNull();
     });
   });
 });
