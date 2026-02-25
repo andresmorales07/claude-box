@@ -82,6 +82,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          build-args: |
+            DOTNET_CHANNELS=8.0 9.0 10.0
           load: true
           tags: hatchpod:scan
           cache-from: type=gha

@@ -4,7 +4,7 @@ FROM debian:bookworm-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c503
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TTYD_VERSION=1.7.7
 ARG RUNC_VERSION=1.1.15
-ARG DOTNET_CHANNELS="8.0 9.0 10.0"
+ARG DOTNET_CHANNELS=""
 ARG TARGETARCH
 
 # Install base packages
@@ -45,13 +45,15 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 COPY --from=ghcr.io/astral-sh/uv:latest@sha256:4cac394b6b72846f8a85a7a0e577c6d61d4e17fe2ccee65d9451a8b3c9efb4ac /uv /usr/local/bin/uv
 COPY --from=ghcr.io/astral-sh/uv:latest@sha256:4cac394b6b72846f8a85a7a0e577c6d61d4e17fe2ccee65d9451a8b3c9efb4ac /uvx /usr/local/bin/uvx
 
-# Install .NET SDKs — side-by-side in /usr/share/dotnet (channels set via DOTNET_CHANNELS build arg)
-RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
-    && for channel in ${DOTNET_CHANNELS}; do \
-         bash /tmp/dotnet-install.sh --channel "$channel" --install-dir /usr/share/dotnet; \
-       done \
-    && ln -s /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
-    && rm /tmp/dotnet-install.sh
+# Install .NET SDKs (optional — set DOTNET_CHANNELS="8.0 9.0 10.0" to include, empty to skip)
+RUN if [ -n "${DOTNET_CHANNELS}" ]; then \
+      curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
+      && for channel in ${DOTNET_CHANNELS}; do \
+           bash /tmp/dotnet-install.sh --channel "$channel" --install-dir /usr/share/dotnet; \
+         done \
+      && ln -s /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
+      && rm /tmp/dotnet-install.sh; \
+    fi
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 
 # Install Docker Engine (requires Sysbox runtime on host for DinD)
