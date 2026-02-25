@@ -140,6 +140,7 @@ export class ClaudeAdapter {
                     maxTurns: options.maxTurns ?? 50,
                     cwd: options.cwd,
                     permissionMode: options.permissionMode,
+                    systemPrompt: { type: "preset", preset: "claude_code" },
                     ...(options.permissionMode === "bypassPermissions"
                         ? { allowDangerouslySkipPermissions: true }
                         : {}),
