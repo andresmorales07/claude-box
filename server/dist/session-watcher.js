@@ -45,6 +45,10 @@ export class SessionWatcher {
                 }
                 await this.replayFromFile(sessionId, watched, client, messageLimit);
             }
+            // Replay buffered thinking text for late-connecting subscribers
+            if (watched.pendingThinkingText) {
+                this.send(client, { type: "thinking_delta", text: watched.pendingThinkingText });
+            }
             return;
         }
         // Create the entry IMMEDIATELY (before any await) to prevent race
@@ -58,6 +62,7 @@ export class SessionWatcher {
             filePath: null,
             byteOffset: 0,
             lineBuffer: "",
+            pendingThinkingText: "",
         };
         this.sessions.set(sessionId, watched);
         // Resolve file path via adapter (async)
@@ -135,6 +140,11 @@ export class SessionWatcher {
             console.warn(`SessionWatcher.pushMessage(${sessionId}): dropped — mode is "${watched.mode}", expected "push"`);
             return;
         }
+        // Clear thinking buffer when the finalized assistant message arrives
+        // (it contains the complete reasoning as a part, so the buffer is redundant)
+        if (message.role === "assistant" && message.parts.some((p) => p.type === "reasoning")) {
+            watched.pendingThinkingText = "";
+        }
         const indexed = { ...message, index: watched.messages.length };
         watched.messages.push(indexed);
         this.broadcast(watched, { type: "message", message: indexed });
@@ -152,6 +162,13 @@ export class SessionWatcher {
             }
             return;
         }
+        // Buffer thinking text so late-connecting subscribers can catch up
+        if (event.type === "thinking_delta") {
+            watched.pendingThinkingText += event.text;
+            if (watched.clients.size === 0) {
+                console.warn(`SessionWatcher.pushEvent(${sessionId}): thinking_delta dropped — 0 clients`);
+            }
+        }
         this.broadcast(watched, event);
     }
     /**
@@ -168,6 +185,7 @@ export class SessionWatcher {
                 filePath: null,
                 byteOffset: 0,
                 lineBuffer: "",
+                pendingThinkingText: "",
             };
             this.sessions.set(sessionId, watched);
         }

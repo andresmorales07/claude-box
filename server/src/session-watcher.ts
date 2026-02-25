@@ -24,6 +24,14 @@ interface WatchedSession {
   filePath: string | null;
   byteOffset: number;
   lineBuffer: string;
+
+  /**
+   * Accumulated thinking text from thinking_delta events.
+   * Buffers text for late-connecting subscribers so they see the
+   * ThinkingIndicator even if they miss the live stream. Cleared
+   * when the finalized assistant message (with reasoning part) arrives.
+   */
+  pendingThinkingText: string;
 }
 
 /**
@@ -75,6 +83,10 @@ export class SessionWatcher {
         }
         await this.replayFromFile(sessionId, watched, client, messageLimit);
       }
+      // Replay buffered thinking text for late-connecting subscribers
+      if (watched.pendingThinkingText) {
+        this.send(client, { type: "thinking_delta", text: watched.pendingThinkingText });
+      }
       return;
     }
 
@@ -89,6 +101,7 @@ export class SessionWatcher {
       filePath: null,
       byteOffset: 0,
       lineBuffer: "",
+      pendingThinkingText: "",
     };
     this.sessions.set(sessionId, watched);
 
@@ -168,6 +181,12 @@ export class SessionWatcher {
       );
       return;
     }
+    // Clear thinking buffer when the finalized assistant message arrives
+    // (it contains the complete reasoning as a part, so the buffer is redundant)
+    if (message.role === "assistant" && message.parts.some((p) => p.type === "reasoning")) {
+      watched.pendingThinkingText = "";
+    }
+
     const indexed = { ...message, index: watched.messages.length };
     watched.messages.push(indexed);
     this.broadcast(watched, { type: "message", message: indexed });
@@ -188,6 +207,15 @@ export class SessionWatcher {
       }
       return;
     }
+
+    // Buffer thinking text so late-connecting subscribers can catch up
+    if (event.type === "thinking_delta") {
+      watched.pendingThinkingText += event.text;
+      if (watched.clients.size === 0) {
+        console.warn(`SessionWatcher.pushEvent(${sessionId}): thinking_delta dropped — 0 clients`);
+      }
+    }
+
     this.broadcast(watched, event);
   }
 
@@ -205,6 +233,7 @@ export class SessionWatcher {
         filePath: null,
         byteOffset: 0,
         lineBuffer: "",
+        pendingThinkingText: "",
       };
       this.sessions.set(sessionId, watched);
     } else {

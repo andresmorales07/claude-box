@@ -85,6 +85,34 @@ describe("Thinking Deltas", () => {
     ws.close();
   });
 
+  it("buffers thinking_delta for late-connecting subscribers (new session with prompt)", async () => {
+    // Create session WITH a thinking prompt — runSession() starts immediately
+    // and begins emitting thinking_delta events before any WS client connects.
+    // The adapter's 50ms delays mean some deltas fire before we can subscribe.
+    const createRes = await api("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ provider: "test", prompt: "[thinking] buffered test" }),
+    });
+    const { id } = await createRes.json();
+
+    // Connect WS after creation returns — by this point, some thinking_delta
+    // events may have already been pushed (and buffered by the watcher).
+    const ws = await connectWs(id);
+
+    // Collect everything until session completes
+    const messages = await collectMessages(ws, (m) =>
+      m.type === "status" && (m as ServerMessage & { status: string }).status === "completed",
+    );
+
+    // The buffer ensures we receive ALL thinking text, regardless of how many
+    // deltas fired before we subscribed. The concatenated text must be complete.
+    const thinkingDeltas = messages.filter((m) => m.type === "thinking_delta") as Array<{ type: string; text: string }>;
+    const allText = thinkingDeltas.map((d) => d.text).join("");
+    expect(allText).toBe("I need to analyze this request carefully.");
+
+    ws.close();
+  });
+
   it("does not replay thinking_delta on late WebSocket connection", async () => {
     // Create idle session, send prompt via WS, wait for completion, then reconnect
     const createRes = await api("/api/sessions", {
