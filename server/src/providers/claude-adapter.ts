@@ -184,6 +184,7 @@ export class ClaudeAdapter implements ProviderAdapter {
           cwd: options.cwd,
           permissionMode: options.permissionMode,
           systemPrompt: { type: "preset", preset: "claude_code" },
+          thinking: { type: "adaptive" },
           ...(options.permissionMode === "bypassPermissions"
             ? { allowDangerouslySkipPermissions: true }
             : {}),

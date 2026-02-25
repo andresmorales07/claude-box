@@ -30,7 +30,6 @@ interface MessagesState {
   slashCommands: SlashCommand[];
   thinkingText: string;
   thinkingStartTime: number | null;
-  thinkingDurations: Record<number, number>;
   lastError: string | null;
 
   // Pagination state
@@ -83,7 +82,6 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   slashCommands: [],
   thinkingText: "",
   thinkingStartTime: null,
-  thinkingDurations: {},
   lastError: null,
   hasOlderMessages: false,
   loadingOlderMessages: false,
@@ -147,10 +145,6 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
           case "message": {
             const m = msg.message;
             if (m.role === "assistant" && m.parts.some((p) => p.type === "reasoning")) {
-              if (thinkingStart != null) {
-                const duration = Date.now() - thinkingStart;
-                set((s) => ({ thinkingDurations: { ...s.thinkingDurations, [m.index]: duration } }));
-              }
               thinkingStart = null;
               set({ thinkingText: "", thinkingStartTime: null });
             }
