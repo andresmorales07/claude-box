@@ -1,6 +1,6 @@
 import { open, stat } from "node:fs/promises";
 import type { WebSocket } from "ws";
-import type { ProviderAdapter, NormalizedMessage } from "./providers/types.js";
+import type { ProviderAdapter, NormalizedMessage, ToolSummary } from "./providers/types.js";
 import type { ServerMessage } from "./types.js";
 
 /**
@@ -34,6 +34,15 @@ interface WatchedSession {
    * Assistant messages without a reasoning part do NOT clear the buffer.
    */
   pendingThinkingText: string;
+
+  /** Active subagent states — keyed by toolUseId (parent Task tool_use_id). */
+  activeSubagents: Map<string, {
+    taskId: string;
+    description: string;
+    agentType?: string;
+    toolCalls: Array<{ toolName: string; summary: ToolSummary }>;
+    startedAt: number;
+  }>;
 }
 
 /**
@@ -104,6 +113,7 @@ export class SessionWatcher {
       byteOffset: 0,
       lineBuffer: "",
       pendingThinkingText: "",
+      activeSubagents: new Map(),
     };
     this.sessions.set(sessionId, watched);
 
@@ -218,12 +228,34 @@ export class SessionWatcher {
       watched.pendingThinkingText += event.text;
     }
 
-    // Clear thinking buffer on terminal status — prevents stale thinking
-    // text from being replayed after session completion or error
+    // Buffer subagent state for late subscribers
+    if (event.type === "subagent_started") {
+      const e = event as { type: string; taskId: string; toolUseId: string; description: string; agentType?: string };
+      watched.activeSubagents.set(e.toolUseId, {
+        taskId: e.taskId,
+        description: e.description,
+        agentType: e.agentType,
+        toolCalls: [],
+        startedAt: Date.now(),
+      });
+    } else if (event.type === "subagent_tool_call") {
+      const e = event as { type: string; toolUseId: string; toolName: string; summary: ToolSummary };
+      const entry = watched.activeSubagents.get(e.toolUseId);
+      if (entry) {
+        entry.toolCalls.push({ toolName: e.toolName, summary: e.summary });
+      }
+    } else if (event.type === "subagent_completed") {
+      const e = event as { type: string; toolUseId: string };
+      watched.activeSubagents.delete(e.toolUseId);
+    }
+
+    // Clear thinking buffer and subagent state on terminal status — prevents
+    // stale data from being replayed after session completion or error
     if (event.type === "status") {
       const status = (event as { status: string }).status;
       if (status === "completed" || status === "error" || status === "interrupted") {
         watched.pendingThinkingText = "";
+        watched.activeSubagents.clear();
       }
     }
 
@@ -245,6 +277,7 @@ export class SessionWatcher {
         byteOffset: 0,
         lineBuffer: "",
         pendingThinkingText: "",
+        activeSubagents: new Map(),
       };
       this.sessions.set(sessionId, watched);
     } else {
@@ -335,6 +368,7 @@ export class SessionWatcher {
     if (pendingThinking) {
       this.send(client, { type: "thinking_delta", text: pendingThinking });
     }
+    this.replaySubagentState(watched, client);
     this.send(client, {
       type: "replay_complete",
       totalMessages: total,
@@ -359,6 +393,7 @@ export class SessionWatcher {
       if (pendingThinking) {
         this.send(client, { type: "thinking_delta", text: pendingThinking });
       }
+      this.replaySubagentState(watched, client);
       this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
       return;
     }
@@ -416,10 +451,11 @@ export class SessionWatcher {
       this.send(client, { type: "tasks", tasks: result.tasks });
     }
 
-    // 4. Send buffered thinking text, then replay_complete
+    // 4. Send buffered thinking text and active subagent state, then replay_complete
     if (pendingThinking) {
       this.send(client, { type: "thinking_delta", text: pendingThinking });
     }
+    this.replaySubagentState(watched, client);
     this.send(client, {
       type: "replay_complete",
       totalMessages: result.totalMessages,
@@ -507,6 +543,27 @@ export class SessionWatcher {
         const indexed = { ...normalized, index: watched.messages.length };
         watched.messages.push(indexed);
         this.broadcast(watched, { type: "message", message: indexed });
+      }
+    }
+  }
+
+  /** Replay buffered active subagent state to a single client. */
+  private replaySubagentState(watched: WatchedSession, client: WebSocket): void {
+    for (const [toolUseId, sub] of watched.activeSubagents) {
+      this.send(client, {
+        type: "subagent_started",
+        taskId: sub.taskId,
+        toolUseId,
+        description: sub.description,
+        ...(sub.agentType ? { agentType: sub.agentType } : {}),
+      } as ServerMessage);
+      for (const tc of sub.toolCalls) {
+        this.send(client, {
+          type: "subagent_tool_call",
+          toolUseId,
+          toolName: tc.toolName,
+          summary: tc.summary,
+        } as ServerMessage);
       }
     }
   }

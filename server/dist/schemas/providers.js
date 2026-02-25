@@ -121,6 +121,30 @@ export const ExtractedTaskSchema = z
     status: TaskStatusSchema,
 })
     .openapi("ExtractedTask");
+// ── Subagent events (ephemeral, not stored as messages) ──
+export const SubagentStartedEventSchema = z
+    .object({
+    taskId: z.string(),
+    toolUseId: z.string(),
+    description: z.string(),
+    agentType: z.string().optional(),
+})
+    .openapi("SubagentStartedEvent");
+export const SubagentToolCallEventSchema = z
+    .object({
+    toolUseId: z.string(),
+    toolName: z.string(),
+    summary: ToolSummarySchema,
+})
+    .openapi("SubagentToolCallEvent");
+export const SubagentCompletedEventSchema = z
+    .object({
+    taskId: z.string(),
+    toolUseId: z.string(),
+    status: z.string(),
+    summary: z.string(),
+})
+    .openapi("SubagentCompletedEvent");
 // ── Paginated messages ──
 export const PaginatedMessagesSchema = z
     .object({

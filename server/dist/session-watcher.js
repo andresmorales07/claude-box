@@ -63,6 +63,7 @@ export class SessionWatcher {
             byteOffset: 0,
             lineBuffer: "",
             pendingThinkingText: "",
+            activeSubagents: new Map(),
         };
         this.sessions.set(sessionId, watched);
         // Resolve file path via adapter (async)
@@ -169,12 +170,35 @@ export class SessionWatcher {
         if (event.type === "thinking_delta") {
             watched.pendingThinkingText += event.text;
         }
-        // Clear thinking buffer on terminal status — prevents stale thinking
-        // text from being replayed after session completion or error
+        // Buffer subagent state for late subscribers
+        if (event.type === "subagent_started") {
+            const e = event;
+            watched.activeSubagents.set(e.toolUseId, {
+                taskId: e.taskId,
+                description: e.description,
+                agentType: e.agentType,
+                toolCalls: [],
+                startedAt: Date.now(),
+            });
+        }
+        else if (event.type === "subagent_tool_call") {
+            const e = event;
+            const entry = watched.activeSubagents.get(e.toolUseId);
+            if (entry) {
+                entry.toolCalls.push({ toolName: e.toolName, summary: e.summary });
+            }
+        }
+        else if (event.type === "subagent_completed") {
+            const e = event;
+            watched.activeSubagents.delete(e.toolUseId);
+        }
+        // Clear thinking buffer and subagent state on terminal status — prevents
+        // stale data from being replayed after session completion or error
         if (event.type === "status") {
             const status = event.status;
             if (status === "completed" || status === "error" || status === "interrupted") {
                 watched.pendingThinkingText = "";
+                watched.activeSubagents.clear();
             }
         }
         this.broadcast(watched, event);
@@ -194,6 +218,7 @@ export class SessionWatcher {
                 byteOffset: 0,
                 lineBuffer: "",
                 pendingThinkingText: "",
+                activeSubagents: new Map(),
             };
             this.sessions.set(sessionId, watched);
         }
@@ -273,6 +298,7 @@ export class SessionWatcher {
         if (pendingThinking) {
             this.send(client, { type: "thinking_delta", text: pendingThinking });
         }
+        this.replaySubagentState(watched, client);
         this.send(client, {
             type: "replay_complete",
             totalMessages: total,
@@ -290,6 +316,7 @@ export class SessionWatcher {
             if (pendingThinking) {
                 this.send(client, { type: "thinking_delta", text: pendingThinking });
             }
+            this.replaySubagentState(watched, client);
             this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
             return;
         }
@@ -344,10 +371,11 @@ export class SessionWatcher {
         if (result.tasks.length > 0 && result.tasks.some((t) => t.status !== "completed")) {
             this.send(client, { type: "tasks", tasks: result.tasks });
         }
-        // 4. Send buffered thinking text, then replay_complete
+        // 4. Send buffered thinking text and active subagent state, then replay_complete
         if (pendingThinking) {
             this.send(client, { type: "thinking_delta", text: pendingThinking });
         }
+        this.replaySubagentState(watched, client);
         this.send(client, {
             type: "replay_complete",
             totalMessages: result.totalMessages,
@@ -430,6 +458,26 @@ export class SessionWatcher {
                 const indexed = { ...normalized, index: watched.messages.length };
                 watched.messages.push(indexed);
                 this.broadcast(watched, { type: "message", message: indexed });
+            }
+        }
+    }
+    /** Replay buffered active subagent state to a single client. */
+    replaySubagentState(watched, client) {
+        for (const [toolUseId, sub] of watched.activeSubagents) {
+            this.send(client, {
+                type: "subagent_started",
+                taskId: sub.taskId,
+                toolUseId,
+                description: sub.description,
+                ...(sub.agentType ? { agentType: sub.agentType } : {}),
+            });
+            for (const tc of sub.toolCalls) {
+                this.send(client, {
+                    type: "subagent_tool_call",
+                    toolUseId,
+                    toolName: tc.toolName,
+                    summary: tc.summary,
+                });
             }
         }
     }

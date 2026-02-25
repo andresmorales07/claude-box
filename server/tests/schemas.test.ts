@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   CreateSessionRequestSchema,
   NormalizedMessageSchema,
+  SubagentStartedEventSchema,
+  SubagentToolCallEventSchema,
+  SubagentCompletedEventSchema,
   isPathContained,
 } from "../src/schemas/index.js";
 
@@ -208,6 +211,28 @@ describe("NormalizedMessageSchema", () => {
       index: 0,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("Subagent event schemas", () => {
+  it("validates SubagentStartedEvent", () => {
+    const valid = { taskId: "t1", toolUseId: "tu1", description: "Find files" };
+    expect(SubagentStartedEventSchema.parse(valid)).toEqual(valid);
+  });
+
+  it("validates SubagentStartedEvent with optional agentType", () => {
+    const valid = { taskId: "t1", toolUseId: "tu1", description: "Find files", agentType: "Explore" };
+    expect(SubagentStartedEventSchema.parse(valid)).toEqual(valid);
+  });
+
+  it("validates SubagentToolCallEvent", () => {
+    const valid = { toolUseId: "tu1", toolName: "Grep", summary: { description: "Search for pattern" } };
+    expect(SubagentToolCallEventSchema.parse(valid)).toEqual(valid);
+  });
+
+  it("validates SubagentCompletedEvent", () => {
+    const valid = { taskId: "t1", toolUseId: "tu1", status: "completed", summary: "Found 3 files" };
+    expect(SubagentCompletedEventSchema.parse(valid)).toEqual(valid);
   });
 });
 

@@ -101,6 +101,8 @@ export declare class SessionWatcher {
     private poll;
     /** Poll a single session for new data. */
     private pollSession;
+    /** Replay buffered active subagent state to a single client. */
+    private replaySubagentState;
     /** Send a message to a single WebSocket client. */
     private send;
     /** Broadcast a message to all clients of a watched session. */

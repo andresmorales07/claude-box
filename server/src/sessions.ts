@@ -252,6 +252,32 @@ async function runSession(
       onThinkingDelta: (text: string) => {
         watcher!.pushEvent(session.sessionId, { type: "thinking_delta", text });
       },
+      onSubagentStarted: (info) => {
+        watcher!.pushEvent(session.sessionId, {
+          type: "subagent_started",
+          taskId: info.taskId,
+          toolUseId: info.toolUseId,
+          description: info.description,
+          ...(info.agentType ? { agentType: info.agentType } : {}),
+        });
+      },
+      onSubagentToolCall: (info) => {
+        watcher!.pushEvent(session.sessionId, {
+          type: "subagent_tool_call",
+          toolUseId: info.toolUseId,
+          toolName: info.toolName,
+          summary: info.summary,
+        });
+      },
+      onSubagentCompleted: (info) => {
+        watcher!.pushEvent(session.sessionId, {
+          type: "subagent_completed",
+          taskId: info.taskId,
+          toolUseId: info.toolUseId,
+          status: info.status,
+          summary: info.summary,
+        });
+      },
     });
 
     // Push the user prompt as a message. The watcher stores it in messages[]

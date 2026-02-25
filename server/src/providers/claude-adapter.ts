@@ -174,6 +174,7 @@ export class ClaudeAdapter implements ProviderAdapter {
     let totalCostUsd = 0;
     let numTurns = 0;
     let accumulatedThinking = "";
+    const taskIdToToolUseId = new Map<string, string>();
 
     try {
       const queryHandle: Query = sdkQuery({
@@ -253,9 +254,68 @@ export class ClaudeAdapter implements ProviderAdapter {
       );
 
       for await (const sdkMessage of queryHandle) {
+        // Handle subagent lifecycle messages (task_started / task_notification)
+        if (sdkMessage.type === "system") {
+          const sysMsg = sdkMessage as { type: string; subtype?: string; [key: string]: unknown };
+          if (sysMsg.subtype === "task_started" && typeof sysMsg.tool_use_id === "string") {
+            taskIdToToolUseId.set(sysMsg.task_id as string, sysMsg.tool_use_id);
+            try {
+              options.onSubagentStarted?.({
+                taskId: sysMsg.task_id as string,
+                toolUseId: sysMsg.tool_use_id,
+                description: (sysMsg.description as string) ?? "",
+                agentType: typeof sysMsg.task_type === "string" ? sysMsg.task_type : undefined,
+              });
+            } catch (err) {
+              console.error("Failed to deliver subagent started:", err);
+            }
+          } else if (sysMsg.subtype === "task_notification") {
+            const toolUseId = taskIdToToolUseId.get(sysMsg.task_id as string);
+            if (toolUseId) {
+              try {
+                options.onSubagentCompleted?.({
+                  taskId: sysMsg.task_id as string,
+                  toolUseId,
+                  status: (sysMsg.status as string) ?? "completed",
+                  summary: (sysMsg.summary as string) ?? "",
+                });
+              } catch (err) {
+                console.error("Failed to deliver subagent completed:", err);
+              }
+              taskIdToToolUseId.delete(sysMsg.task_id as string);
+            }
+          }
+          continue;
+        }
+
+        // Extract subagent tool calls from sidechain assistant messages
+        const parentToolUseId = (sdkMessage as { parent_tool_use_id?: string | null }).parent_tool_use_id;
+        if (parentToolUseId != null && sdkMessage.type === "assistant") {
+          const content = (sdkMessage as { message?: { content?: unknown[] } }).message?.content;
+          if (Array.isArray(content)) {
+            for (const block of content as ContentBlock[]) {
+              if (block.type === "tool_use" && block.name) {
+                try {
+                  options.onSubagentToolCall?.({
+                    toolUseId: parentToolUseId,
+                    toolName: block.name,
+                    summary: getToolSummary(block.name, block.input),
+                  });
+                } catch (err) {
+                  console.error("Failed to deliver subagent tool call:", err);
+                }
+              }
+            }
+          }
+        }
+
         // Handle streaming thinking deltas (raw API events).
         // stream_events are raw API-level; only thinking_delta is forwarded.
         if (sdkMessage.type === "stream_event") {
+          // Skip sidechain stream events (subagent thinking deltas)
+          if ((sdkMessage as { parent_tool_use_id?: string | null }).parent_tool_use_id != null) {
+            continue;
+          }
           const event = (sdkMessage as { type: string; event: Record<string, unknown> }).event;
           if (
             event?.type === "content_block_delta" &&

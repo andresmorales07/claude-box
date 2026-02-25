@@ -12,8 +12,21 @@ type ServerMessage =
   | { type: "thinking_delta"; text: string }
   | { type: "replay_complete"; totalMessages?: number; oldestIndex?: number }
   | { type: "tasks"; tasks: Array<{ id: string; subject: string; activeForm?: string; status: string }> }
+  | { type: "subagent_started"; taskId: string; toolUseId: string; description: string; agentType?: string }
+  | { type: "subagent_tool_call"; toolUseId: string; toolName: string; summary: { description: string; command?: string } }
+  | { type: "subagent_completed"; taskId: string; toolUseId: string; status: string; summary: string }
   | { type: "ping" }
   | { type: "error"; message: string; error?: string };
+
+export interface SubagentState {
+  taskId: string;
+  description: string;
+  agentType?: string;
+  toolCalls: Array<{ toolName: string; summary: { description: string; command?: string } }>;
+  status: "running" | "completed" | "failed" | "stopped";
+  summary?: string;
+  startedAt: number;
+}
 
 interface PendingApproval {
   toolName: string;
@@ -40,6 +53,9 @@ interface MessagesState {
 
   // Server-extracted tasks (from full message scan)
   serverTasks: ExtractedTask[];
+
+  // Active and recently completed subagent states — keyed by toolUseId
+  activeSubagents: Map<string, SubagentState>;
 
   connect: (sessionId: string) => void;
   disconnect: () => void;
@@ -102,6 +118,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   oldestLoadedIndex: 0,
   totalMessageCount: 0,
   serverTasks: [],
+  activeSubagents: new Map(),
 
   connect: (sessionId: string) => {
     // After a session redirect, the WebSocket is already connected to the
@@ -133,6 +150,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
       oldestLoadedIndex: 0,
       totalMessageCount: 0,
       serverTasks: [],
+      activeSubagents: new Map(),
     });
 
     const doConnect = () => {
@@ -196,6 +214,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
                 ...(msg.source ? { source: msg.source } : {}),
                 thinkingText: "",
                 thinkingStartTime: null,
+                activeSubagents: new Map(),
               });
             } else if (isRunningStatus) {
               // Entering/re-entering running state — start the processing timer.
@@ -250,6 +269,52 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
             break;
           case "slash_commands":
             if (Array.isArray(msg.commands)) set({ slashCommands: msg.commands });
+            break;
+          case "subagent_started":
+            set((s) => {
+              const map = new Map(s.activeSubagents);
+              map.set(msg.toolUseId, {
+                taskId: msg.taskId,
+                description: msg.description,
+                agentType: msg.agentType,
+                toolCalls: [],
+                status: "running",
+                startedAt: Date.now(),
+              });
+              return { activeSubagents: map };
+            });
+            break;
+          case "subagent_tool_call":
+            set((s) => {
+              const map = new Map(s.activeSubagents);
+              const entry = map.get(msg.toolUseId);
+              if (entry) {
+                map.set(msg.toolUseId, {
+                  ...entry,
+                  toolCalls: [...entry.toolCalls, { toolName: msg.toolName, summary: msg.summary }],
+                });
+              }
+              return { activeSubagents: map };
+            });
+            break;
+          case "subagent_completed":
+            set((s) => {
+              const map = new Map(s.activeSubagents);
+              const entry = map.get(msg.toolUseId);
+              if (entry) {
+                const statusMap: Record<string, SubagentState["status"]> = {
+                  completed: "completed",
+                  failed: "failed",
+                  stopped: "stopped",
+                };
+                map.set(msg.toolUseId, {
+                  ...entry,
+                  status: statusMap[msg.status] ?? "completed",
+                  summary: msg.summary,
+                });
+              }
+              return { activeSubagents: map };
+            });
             break;
           case "error":
             console.error("Server error:", msg.message);

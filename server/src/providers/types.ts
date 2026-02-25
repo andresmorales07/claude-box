@@ -18,6 +18,9 @@ export type {
   PaginatedMessages,
   SessionListItem,
   PermissionModeCommon,
+  SubagentStartedEvent,
+  SubagentToolCallEvent,
+  SubagentCompletedEvent,
 } from "../schemas/index.js";
 
 // ── Provider interface types (contain callbacks, AbortSignal, AsyncGenerator) ──
@@ -45,6 +48,9 @@ export interface ProviderSessionOptions {
   resumeSessionId?: string;
   onToolApproval: (request: ToolApprovalRequest) => Promise<ApprovalDecision>;
   onThinkingDelta?: (text: string) => void;
+  onSubagentStarted?: (info: { taskId: string; toolUseId: string; description: string; agentType?: string }) => void;
+  onSubagentToolCall?: (info: { toolUseId: string; toolName: string; summary: import("../schemas/providers.js").ToolSummary }) => void;
+  onSubagentCompleted?: (info: { taskId: string; toolUseId: string; status: string; summary: string }) => void;
 }
 
 export interface ProviderSessionResult {

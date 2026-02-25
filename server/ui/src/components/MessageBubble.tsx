@@ -3,8 +3,9 @@ import type { NormalizedMessage, MessagePart, TextPart, ToolResultPart, ToolUseP
 
 import { Markdown } from "./Markdown";
 import { FileDiffCard } from "./FileDiffCard";
+import { SubagentCard } from "./SubagentCard";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Wrench, AlertCircle, Bot } from "lucide-react";
+import { ChevronDown, Wrench, AlertCircle } from "lucide-react";
 
 interface Props {
   message: NormalizedMessage;
@@ -116,18 +117,9 @@ function renderPart(
       if (["TaskCreate", "TaskUpdate", "TaskList", "TaskGet"].includes(part.toolName)) {
         return null;
       }
-      // Compact rendering for Task (subagent) tool calls
+      // Live subagent card — shows tool calls in real time, falls back to static indicator
       if (part.toolName === "Task") {
-        const input = part.input as Record<string, unknown> | undefined;
-        const description = (input?.description as string) || (input?.prompt as string) || "Running subagent...";
-        const agentType = input?.subagent_type as string | undefined;
-        return (
-          <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-secondary/40 text-xs text-muted-foreground">
-            <Bot className="size-3.5 shrink-0" />
-            <span className="font-medium">Agent{agentType ? `: ${agentType}` : ""}</span>
-            <span className="truncate">{description}</span>
-          </div>
-        );
+        return <SubagentCard key={i} part={part} />;
       }
       // File diff rendering for Write/Edit
       if (part.toolName === "Write" || part.toolName === "Edit") {

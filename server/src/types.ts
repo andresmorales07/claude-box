@@ -1,4 +1,4 @@
-import type { NormalizedMessage, PermissionModeCommon, SlashCommand } from "./providers/types.js";
+import type { NormalizedMessage, PermissionModeCommon, SlashCommand, ToolSummary } from "./providers/types.js";
 import type { ApprovalDecision } from "./providers/types.js";
 
 // ── Serializable types — re-exported from Zod schemas ──
@@ -50,5 +50,8 @@ export type ServerMessage =
   | { type: "thinking_delta"; text: string }
   | { type: "replay_complete"; totalMessages?: number; oldestIndex?: number }
   | { type: "tasks"; tasks: Array<{ id: string; subject: string; activeForm?: string; status: string }> }
+  | { type: "subagent_started"; taskId: string; toolUseId: string; description: string; agentType?: string }
+  | { type: "subagent_tool_call"; toolUseId: string; toolName: string; summary: ToolSummary }
+  | { type: "subagent_completed"; taskId: string; toolUseId: string; status: string; summary: string }
   | { type: "ping" }
   | { type: "error"; message: string };

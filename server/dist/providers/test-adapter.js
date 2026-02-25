@@ -247,6 +247,109 @@ export class TestAdapter {
                     numTurns: 1,
                 };
             }
+            case "subagent": {
+                checkAbort(abortSignal);
+                const taskToolUseId = randomUUID();
+                // Emit Task tool_use in parent stream
+                yield {
+                    role: "assistant",
+                    parts: [
+                        {
+                            type: "tool_use",
+                            toolUseId: taskToolUseId,
+                            toolName: "Task",
+                            input: { description: "Find auth handlers", subagent_type: "Explore", prompt: "find auth" },
+                        },
+                    ],
+                    index: index++,
+                };
+                // Simulate subagent lifecycle via callbacks
+                options.onSubagentStarted?.({
+                    taskId: "test-task-1",
+                    toolUseId: taskToolUseId,
+                    description: "Find auth handlers",
+                    agentType: "Explore",
+                });
+                await delay(30, abortSignal);
+                options.onSubagentToolCall?.({
+                    toolUseId: taskToolUseId,
+                    toolName: "Grep",
+                    summary: { description: 'Search for "authenticate"' },
+                });
+                await delay(30, abortSignal);
+                options.onSubagentToolCall?.({
+                    toolUseId: taskToolUseId,
+                    toolName: "Read",
+                    summary: { description: "/src/auth.ts" },
+                });
+                await delay(30, abortSignal);
+                options.onSubagentCompleted?.({
+                    taskId: "test-task-1",
+                    toolUseId: taskToolUseId,
+                    status: "completed",
+                    summary: "Found 3 auth handler functions",
+                });
+                checkAbort(abortSignal);
+                yield {
+                    role: "user",
+                    parts: [{ type: "tool_result", toolUseId: taskToolUseId, output: "Found 3 auth handler functions", isError: false }],
+                    index: index++,
+                };
+                yield {
+                    role: "assistant",
+                    parts: [{ type: "text", text: "The subagent found 3 auth handler functions." }],
+                    index: index++,
+                };
+                break;
+            }
+            case "subagent-slow": {
+                // Same as subagent but with longer delays for late-subscriber testing
+                checkAbort(abortSignal);
+                const taskToolUseId2 = randomUUID();
+                yield {
+                    role: "assistant",
+                    parts: [
+                        {
+                            type: "tool_use",
+                            toolUseId: taskToolUseId2,
+                            toolName: "Task",
+                            input: { description: "Slow subagent", subagent_type: "Explore", prompt: "slow" },
+                        },
+                    ],
+                    index: index++,
+                };
+                options.onSubagentStarted?.({
+                    taskId: "test-task-slow",
+                    toolUseId: taskToolUseId2,
+                    description: "Slow subagent",
+                    agentType: "Explore",
+                });
+                await delay(200, abortSignal);
+                options.onSubagentToolCall?.({
+                    toolUseId: taskToolUseId2,
+                    toolName: "Glob",
+                    summary: { description: "Find **/*.ts" },
+                });
+                await delay(100, abortSignal);
+                options.onSubagentCompleted?.({
+                    taskId: "test-task-slow",
+                    toolUseId: taskToolUseId2,
+                    status: "completed",
+                    summary: "Done",
+                });
+                checkAbort(abortSignal);
+                yield {
+                    role: "user",
+                    parts: [{ type: "tool_result", toolUseId: taskToolUseId2, output: "Done", isError: false }],
+                    index: index++,
+                };
+                yield {
+                    role: "assistant",
+                    parts: [{ type: "text", text: "Done." }],
+                    index: index++,
+                };
+                break;
+            }
             case "thinking": {
                 // Simulate streaming thinking deltas
                 checkAbort(abortSignal);
