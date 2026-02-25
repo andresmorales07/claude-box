@@ -2,6 +2,7 @@ import { open, stat } from "node:fs/promises";
 import type { WebSocket } from "ws";
 import type { ProviderAdapter, NormalizedMessage, ToolSummary } from "./providers/types.js";
 import type { ServerMessage, ContextUsage } from "./types.js";
+import type { GitDiffStat } from "./schemas/git.js";
 
 /**
  * Session delivery mode.
@@ -53,6 +54,12 @@ interface WatchedSession {
 
   /** Last known context usage. Kept on terminal status (useful final state). */
   lastContextUsage: ContextUsage | null;
+
+  /** Last known git diff stat. Sent to late subscribers. Cleared on terminal status. */
+  lastGitDiffStat: GitDiffStat | null;
+
+  /** Session working directory — needed for triggering git diff from poll mode. */
+  cwd: string | null;
 }
 
 /**
@@ -99,17 +106,18 @@ export class SessionWatcher {
       const subagentsSnapshot = new Map(watched.activeSubagents);
       const compactingSnapshot = watched.isCompacting;
       const contextUsageSnapshot = watched.lastContextUsage;
+      const gitDiffStatSnapshot = watched.lastGitDiffStat;
       // Replay from best available source (buffered events are sent before
       // replay_complete inside the replay methods)
       if (watched.messages.length > 0) {
-        this.replayFromMemory(watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot);
+        this.replayFromMemory(watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot);
       } else {
         // Re-resolve file path if it was null at initial subscribe time
         if (!watched.filePath) {
           const filePath = await this.adapter.getSessionFilePath(sessionId);
           if (filePath) watched.filePath = filePath;
         }
-        await this.replayFromFile(sessionId, watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot);
+        await this.replayFromFile(sessionId, watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot);
       }
       return;
     }
@@ -129,6 +137,8 @@ export class SessionWatcher {
       activeSubagents: new Map(),
       isCompacting: false,
       lastContextUsage: null,
+      lastGitDiffStat: null,
+      cwd: null,
     };
     this.sessions.set(sessionId, watched);
 
@@ -229,6 +239,7 @@ export class SessionWatcher {
    *   - thinking_delta  → pendingThinkingText
    *   - compacting      → isCompacting
    *   - context_usage   → lastContextUsage
+   *   - git_diff_stat   → lastGitDiffStat
    *   - subagent_*      → activeSubagents
    */
   pushEvent(sessionId: string, event: ServerMessage): void {
@@ -252,6 +263,11 @@ export class SessionWatcher {
       watched.isCompacting = event.isCompacting;
     } else if (event.type === "context_usage") {
       watched.lastContextUsage = { inputTokens: event.inputTokens, contextWindow: event.contextWindow, percentUsed: event.percentUsed };
+    }
+
+    if (event.type === "git_diff_stat") {
+      const e = event as ServerMessage & { type: "git_diff_stat" };
+      watched.lastGitDiffStat = { files: e.files, totalInsertions: e.totalInsertions, totalDeletions: e.totalDeletions };
     }
 
     // Buffer subagent state for late subscribers
@@ -287,6 +303,7 @@ export class SessionWatcher {
         watched.pendingThinkingText = "";
         watched.activeSubagents.clear();
         watched.isCompacting = false;
+        watched.lastGitDiffStat = null;
       }
     }
 
@@ -297,7 +314,7 @@ export class SessionWatcher {
    * Set the delivery mode for a session. Creates the WatchedSession entry
    * if it doesn't exist yet (needed when runSession starts before WS connects).
    */
-  setMode(sessionId: string, mode: SessionMode): void {
+  setMode(sessionId: string, mode: SessionMode, cwd?: string): void {
     let watched = this.sessions.get(sessionId);
     if (!watched) {
       watched = {
@@ -311,10 +328,13 @@ export class SessionWatcher {
         activeSubagents: new Map(),
         isCompacting: false,
         lastContextUsage: null,
+        lastGitDiffStat: null,
+        cwd: cwd ?? null,
       };
       this.sessions.set(sessionId, watched);
     } else {
       watched.mode = mode;
+      watched.cwd = cwd ?? watched.cwd ?? null;
     }
   }
 
@@ -387,6 +407,7 @@ export class SessionWatcher {
     subagentsSnapshot?: Map<string, SubagentEntry>,
     isCompacting?: boolean,
     contextUsage?: ContextUsage | null,
+    gitDiffStat?: GitDiffStat | null,
   ): void {
     const allMessages = watched.messages;
     const total = allMessages.length;
@@ -411,6 +432,9 @@ export class SessionWatcher {
     if (contextUsage) {
       this.send(client, { type: "context_usage", ...contextUsage });
     }
+    if (gitDiffStat) {
+      this.send(client, { type: "git_diff_stat", ...gitDiffStat });
+    }
     this.send(client, {
       type: "replay_complete",
       totalMessages: total,
@@ -432,6 +456,7 @@ export class SessionWatcher {
     subagentsSnapshot?: Map<string, SubagentEntry>,
     isCompacting?: boolean,
     contextUsage?: ContextUsage | null,
+    gitDiffStat?: GitDiffStat | null,
   ): Promise<void> {
     // No file to replay (e.g., test adapter) — just signal replay is done
     if (!watched.filePath) {
@@ -441,6 +466,7 @@ export class SessionWatcher {
       this.replaySubagentState(subagentsSnapshot ?? watched.activeSubagents, client);
       if (isCompacting) this.send(client, { type: "compacting", isCompacting: true });
       if (contextUsage) this.send(client, { type: "context_usage", ...contextUsage });
+      if (gitDiffStat) this.send(client, { type: "git_diff_stat", ...gitDiffStat });
       this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
       return;
     }
@@ -468,6 +494,7 @@ export class SessionWatcher {
         this.replaySubagentState(subagentsSnapshot ?? watched.activeSubagents, client);
         if (isCompacting) this.send(client, { type: "compacting", isCompacting: true });
         if (contextUsage) this.send(client, { type: "context_usage", ...contextUsage });
+        if (gitDiffStat) this.send(client, { type: "git_diff_stat", ...gitDiffStat });
         this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
         return;
       }
@@ -478,6 +505,7 @@ export class SessionWatcher {
       this.replaySubagentState(subagentsSnapshot ?? watched.activeSubagents, client);
       if (isCompacting) this.send(client, { type: "compacting", isCompacting: true });
       if (contextUsage) this.send(client, { type: "context_usage", ...contextUsage });
+      if (gitDiffStat) this.send(client, { type: "git_diff_stat", ...gitDiffStat });
       this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
       throw err;
     }
@@ -511,6 +539,7 @@ export class SessionWatcher {
     this.replaySubagentState(subagentsSnapshot ?? watched.activeSubagents, client);
     if (isCompacting) this.send(client, { type: "compacting", isCompacting: true });
     if (contextUsage) this.send(client, { type: "context_usage", ...contextUsage });
+    if (gitDiffStat) this.send(client, { type: "git_diff_stat", ...gitDiffStat });
     this.send(client, {
       type: "replay_complete",
       totalMessages: result.totalMessages,

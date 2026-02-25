@@ -143,3 +143,82 @@ describe("GET /api/git/status", () => {
     expect(res.status).toBe(401);
   });
 });
+
+// ── SessionWatcher git_diff_stat buffering tests ──
+
+import { SessionWatcher } from "../src/session-watcher.js";
+
+describe("SessionWatcher git_diff_stat buffering", () => {
+  it("buffers and replays git_diff_stat to late subscribers", async () => {
+    const mockAdapter = {
+      getSessionFilePath: async () => null,
+      normalizeFileLine: () => null,
+      getMessages: async () => ({ messages: [], tasks: [], totalMessages: 0, hasMore: false, oldestIndex: 0 }),
+      listSessions: async () => [],
+      getSessionHistory: async () => [],
+      run: () => { throw new Error("not implemented"); },
+    } as any;
+
+    const watcher = new SessionWatcher(mockAdapter);
+    const sessionId = "test-git-session";
+    watcher.setMode(sessionId, "push");
+
+    // Push a git_diff_stat event with no subscribers
+    watcher.pushEvent(sessionId, {
+      type: "git_diff_stat",
+      files: [{ path: "foo.ts", insertions: 3, deletions: 1, binary: false, untracked: false, staged: false }],
+      totalInsertions: 3,
+      totalDeletions: 1,
+    } as any);
+
+    // Late subscriber receives buffered stat
+    const messages: any[] = [];
+    const mockWs = {
+      readyState: 1,
+      send: (data: string) => { messages.push(JSON.parse(data)); },
+    } as any;
+
+    await watcher.subscribe(sessionId, mockWs);
+
+    const gitMsg = messages.find((m: any) => m.type === "git_diff_stat");
+    expect(gitMsg).toBeDefined();
+    expect(gitMsg.totalInsertions).toBe(3);
+    expect(gitMsg.files).toHaveLength(1);
+  });
+
+  it("clears git_diff_stat on terminal status", async () => {
+    const mockAdapter = {
+      getSessionFilePath: async () => null,
+      normalizeFileLine: () => null,
+      getMessages: async () => ({ messages: [], tasks: [], totalMessages: 0, hasMore: false, oldestIndex: 0 }),
+      listSessions: async () => [],
+      getSessionHistory: async () => [],
+      run: () => { throw new Error("not implemented"); },
+    } as any;
+
+    const watcher = new SessionWatcher(mockAdapter);
+    const sessionId = "test-git-clear";
+    watcher.setMode(sessionId, "push");
+
+    watcher.pushEvent(sessionId, {
+      type: "git_diff_stat",
+      files: [{ path: "foo.ts", insertions: 1, deletions: 0, binary: false, untracked: false, staged: false }],
+      totalInsertions: 1,
+      totalDeletions: 0,
+    } as any);
+
+    // Terminal status clears the buffer
+    watcher.pushEvent(sessionId, { type: "status", status: "completed" });
+
+    const messages: any[] = [];
+    const mockWs = {
+      readyState: 1,
+      send: (data: string) => { messages.push(JSON.parse(data)); },
+    } as any;
+
+    await watcher.subscribe(sessionId, mockWs);
+
+    const gitMsg = messages.find((m: any) => m.type === "git_diff_stat");
+    expect(gitMsg).toBeUndefined();
+  });
+});
