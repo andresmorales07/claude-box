@@ -20,6 +20,9 @@ export {
   PaginatedMessagesSchema,
   SessionListItemSchema,
   PermissionModeCommonSchema,
+  SubagentStartedEventSchema,
+  SubagentToolCallEventSchema,
+  SubagentCompletedEventSchema,
 } from "./providers.js";
 
 export type {
@@ -40,6 +43,9 @@ export type {
   PaginatedMessages,
   SessionListItem,
   PermissionModeCommon,
+  SubagentStartedEvent,
+  SubagentToolCallEvent,
+  SubagentCompletedEvent,
 } from "./providers.js";
 
 export {

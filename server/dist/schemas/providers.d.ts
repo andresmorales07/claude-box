@@ -234,6 +234,30 @@ export declare const ExtractedTaskSchema: z.ZodObject<{
         deleted: "deleted";
     }>;
 }, z.core.$strip>;
+export declare const SubagentStartedEventSchema: z.ZodObject<{
+    taskId: z.ZodString;
+    toolUseId: z.ZodString;
+    description: z.ZodString;
+    agentType: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
+export declare const SubagentToolCallEventSchema: z.ZodObject<{
+    toolUseId: z.ZodString;
+    toolName: z.ZodString;
+    summary: z.ZodObject<{
+        description: z.ZodString;
+        command: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>;
+}, z.core.$strip>;
+export declare const SubagentCompletedEventSchema: z.ZodObject<{
+    taskId: z.ZodString;
+    toolUseId: z.ZodString;
+    status: z.ZodEnum<{
+        completed: "completed";
+        failed: "failed";
+        stopped: "stopped";
+    }>;
+    summary: z.ZodString;
+}, z.core.$strip>;
 export declare const PaginatedMessagesSchema: z.ZodObject<{
     messages: z.ZodArray<z.ZodDiscriminatedUnion<[z.ZodObject<{
         role: z.ZodLiteral<"user">;
@@ -359,3 +383,6 @@ export type ExtractedTask = z.infer<typeof ExtractedTaskSchema>;
 export type PaginatedMessages = z.infer<typeof PaginatedMessagesSchema>;
 export type SessionListItem = z.infer<typeof SessionListItemSchema>;
 export type PermissionModeCommon = z.infer<typeof PermissionModeCommonSchema>;
+export type SubagentStartedEvent = z.infer<typeof SubagentStartedEventSchema>;
+export type SubagentToolCallEvent = z.infer<typeof SubagentToolCallEventSchema>;
+export type SubagentCompletedEvent = z.infer<typeof SubagentCompletedEventSchema>;

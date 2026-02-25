@@ -174,6 +174,7 @@ export class ClaudeAdapter implements ProviderAdapter {
     let totalCostUsd = 0;
     let numTurns = 0;
     let accumulatedThinking = "";
+    const taskIdToToolUseId = new Map<string, string>();
 
     try {
       const queryHandle: Query = sdkQuery({
@@ -253,9 +254,87 @@ export class ClaudeAdapter implements ProviderAdapter {
       );
 
       for await (const sdkMessage of queryHandle) {
+        // Handle subagent lifecycle messages (task_started / task_notification)
+        if (sdkMessage.type === "system") {
+          const sysMsg = sdkMessage as { type: string; subtype?: string; [key: string]: unknown };
+          if (sysMsg.subtype === "task_started") {
+            if (typeof sysMsg.tool_use_id !== "string" || !sysMsg.tool_use_id) {
+              console.warn("claude-adapter: task_started missing tool_use_id", sysMsg);
+            } else if (typeof sysMsg.task_id !== "string" || !sysMsg.task_id) {
+              console.warn("claude-adapter: task_started missing task_id", sysMsg);
+            } else {
+              taskIdToToolUseId.set(sysMsg.task_id, sysMsg.tool_use_id);
+              try {
+                options.onSubagentStarted?.({
+                  taskId: sysMsg.task_id,
+                  toolUseId: sysMsg.tool_use_id,
+                  description: (sysMsg.description as string) || "Running subagent",
+                  agentType: typeof sysMsg.task_type === "string" && sysMsg.task_type ? sysMsg.task_type : undefined,
+                });
+              } catch (err) {
+                console.error(`claude-adapter: onSubagentStarted callback failed for taskId="${sysMsg.task_id}" toolUseId="${sysMsg.tool_use_id}":`, err);
+              }
+            }
+          } else if (sysMsg.subtype === "task_notification") {
+            const toolUseId = taskIdToToolUseId.get(sysMsg.task_id as string);
+            if (toolUseId) {
+              const rawStatus = (sysMsg.status as string) ?? "completed";
+              const statusMap: Record<string, "completed" | "failed" | "stopped"> = {
+                completed: "completed",
+                failed: "failed",
+                stopped: "stopped",
+              };
+              const status = statusMap[rawStatus] ?? "completed";
+              try {
+                options.onSubagentCompleted?.({
+                  taskId: sysMsg.task_id as string,
+                  toolUseId,
+                  status,
+                  summary: (sysMsg.summary as string) ?? "",
+                });
+              } catch (err) {
+                console.error(`claude-adapter: onSubagentCompleted callback failed for taskId="${sysMsg.task_id as string}" toolUseId="${toolUseId}":`, err);
+              }
+              taskIdToToolUseId.delete(sysMsg.task_id as string);
+            } else {
+              console.warn(
+                `claude-adapter: task_notification for unknown task_id "${sysMsg.task_id}" — no matching task_started received. Subagent card may be stuck.`,
+              );
+            }
+          } else if (sysMsg.subtype !== undefined) {
+            console.warn(`claude-adapter: unhandled system subtype "${sysMsg.subtype}"`, sysMsg);
+          }
+          continue;
+        }
+
+        // Extract subagent tool calls from sidechain assistant messages
+        const parentToolUseId = (sdkMessage as { parent_tool_use_id?: string | null }).parent_tool_use_id;
+        if (parentToolUseId != null && sdkMessage.type === "assistant") {
+          const content = (sdkMessage as { message?: { content?: unknown[] } }).message?.content;
+          if (Array.isArray(content)) {
+            for (const block of content as ContentBlock[]) {
+              if (block.type === "tool_use" && block.name) {
+                try {
+                  options.onSubagentToolCall?.({
+                    toolUseId: parentToolUseId,
+                    toolName: block.name,
+                    summary: getToolSummary(block.name, block.input),
+                  });
+                } catch (err) {
+                  console.error(`claude-adapter: onSubagentToolCall callback failed for toolUseId="${parentToolUseId}" toolName="${block.name}":`, err);
+                }
+              }
+            }
+          }
+        }
+
         // Handle streaming thinking deltas (raw API events).
         // stream_events are raw API-level; only thinking_delta is forwarded.
         if (sdkMessage.type === "stream_event") {
+          // Skip sidechain stream events (subagent thinking deltas)
+          if ((sdkMessage as { parent_tool_use_id?: string | null }).parent_tool_use_id != null) {
+            continue;
+          }
           const event = (sdkMessage as { type: string; event: Record<string, unknown> }).event;
           if (
             event?.type === "content_block_delta" &&

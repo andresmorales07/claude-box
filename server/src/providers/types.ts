@@ -18,11 +18,22 @@ export type {
   PaginatedMessages,
   SessionListItem,
   PermissionModeCommon,
+  SubagentStartedEvent,
+  SubagentToolCallEvent,
+  SubagentCompletedEvent,
 } from "../schemas/index.js";
 
 // ── Provider interface types (contain callbacks, AbortSignal, AsyncGenerator) ──
 
-import type { NormalizedMessage, PermissionModeCommon, PaginatedMessages, SessionListItem } from "../schemas/index.js";
+import type {
+  NormalizedMessage,
+  PermissionModeCommon,
+  PaginatedMessages,
+  SessionListItem,
+  SubagentStartedEvent,
+  SubagentToolCallEvent,
+  SubagentCompletedEvent,
+} from "../schemas/index.js";
 
 export interface ToolApprovalRequest {
   toolName: string;
@@ -45,6 +56,9 @@ export interface ProviderSessionOptions {
   resumeSessionId?: string;
   onToolApproval: (request: ToolApprovalRequest) => Promise<ApprovalDecision>;
   onThinkingDelta?: (text: string) => void;
+  onSubagentStarted?: (info: SubagentStartedEvent) => void;
+  onSubagentToolCall?: (info: SubagentToolCallEvent) => void;
+  onSubagentCompleted?: (info: SubagentCompletedEvent) => void;
 }
 
 export interface ProviderSessionResult {

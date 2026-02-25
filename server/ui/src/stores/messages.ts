@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { useAuthStore } from "./auth";
 import { useSessionsStore } from "./sessions";
-import type { NormalizedMessage, SlashCommand, ExtractedTask } from "@shared/types";
+import type { NormalizedMessage, SlashCommand, ExtractedTask, ToolSummary } from "@shared/types";
 
 type ServerMessage =
   | { type: "message"; message: NormalizedMessage }
@@ -12,8 +12,21 @@ type ServerMessage =
   | { type: "thinking_delta"; text: string }
   | { type: "replay_complete"; totalMessages?: number; oldestIndex?: number }
   | { type: "tasks"; tasks: Array<{ id: string; subject: string; activeForm?: string; status: string }> }
+  | { type: "subagent_started"; taskId: string; toolUseId: string; description: string; agentType?: string; startedAt: number }
+  | { type: "subagent_tool_call"; toolUseId: string; toolName: string; summary: ToolSummary }
+  | { type: "subagent_completed"; taskId: string; toolUseId: string; status: "completed" | "failed" | "stopped"; summary: string }
   | { type: "ping" }
   | { type: "error"; message: string; error?: string };
+
+export interface SubagentState {
+  taskId: string;
+  description: string;
+  agentType?: string;
+  toolCalls: Array<{ toolName: string; summary: ToolSummary }>;
+  status: "running" | "completed" | "failed" | "stopped";
+  summary?: string;
+  startedAt: number;
+}
 
 interface PendingApproval {
   toolName: string;
@@ -40,6 +53,9 @@ interface MessagesState {
 
   // Server-extracted tasks (from full message scan)
   serverTasks: ExtractedTask[];
+
+  // Active and recently completed subagent states — keyed by toolUseId
+  activeSubagents: Map<string, SubagentState>;
 
   connect: (sessionId: string) => void;
   disconnect: () => void;
@@ -102,6 +118,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   oldestLoadedIndex: 0,
   totalMessageCount: 0,
   serverTasks: [],
+  activeSubagents: new Map(),
 
   connect: (sessionId: string) => {
     // After a session redirect, the WebSocket is already connected to the
@@ -133,6 +150,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
       oldestLoadedIndex: 0,
       totalMessageCount: 0,
       serverTasks: [],
+      activeSubagents: new Map(),
     });
 
     const doConnect = () => {
@@ -196,6 +214,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
                 ...(msg.source ? { source: msg.source } : {}),
                 thinkingText: "",
                 thinkingStartTime: null,
+                activeSubagents: new Map(),
               });
             } else if (isRunningStatus) {
               // Entering/re-entering running state — start the processing timer.
@@ -250,6 +269,51 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
             break;
           case "slash_commands":
             if (Array.isArray(msg.commands)) set({ slashCommands: msg.commands });
+            break;
+          case "subagent_started":
+            set((s) => {
+              const map = new Map(s.activeSubagents);
+              map.set(msg.toolUseId, {
+                taskId: msg.taskId,
+                description: msg.description,
+                agentType: msg.agentType,
+                toolCalls: [],
+                status: "running",
+                startedAt: msg.startedAt,
+              });
+              return { activeSubagents: map };
+            });
+            break;
+          case "subagent_tool_call":
+            set((s) => {
+              const map = new Map(s.activeSubagents);
+              const entry = map.get(msg.toolUseId);
+              if (entry) {
+                map.set(msg.toolUseId, {
+                  ...entry,
+                  toolCalls: [...entry.toolCalls, { toolName: msg.toolName, summary: msg.summary }],
+                });
+              } else {
+                console.warn(`subagent_tool_call for unknown toolUseId "${msg.toolUseId}" — possible ordering issue`);
+              }
+              return { activeSubagents: map };
+            });
+            break;
+          case "subagent_completed":
+            set((s) => {
+              const map = new Map(s.activeSubagents);
+              const entry = map.get(msg.toolUseId);
+              if (entry) {
+                map.set(msg.toolUseId, {
+                  ...entry,
+                  status: msg.status,
+                  summary: msg.summary,
+                });
+              } else {
+                console.warn(`subagent_completed for unknown toolUseId "${msg.toolUseId}" — possible ordering issue`);
+              }
+              return { activeSubagents: map };
+            });
             break;
           case "error":
             console.error("Server error:", msg.message);
