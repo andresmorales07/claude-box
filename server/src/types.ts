@@ -20,6 +20,7 @@ export interface ActiveSession {
   cwd: string;
   createdAt: Date;
   permissionMode: PermissionModeCommon;
+  currentPermissionMode: PermissionModeCommon;
   model: string | undefined;
   abortController: AbortController;
   pendingApproval: PendingApproval | null;
@@ -43,7 +44,8 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: "message"; message: NormalizedMessage }
-  | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown }
+  | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown; targetMode?: string }
+  | { type: "mode_changed"; mode: string }
   | { type: "status"; status: SessionStatus; error?: string; source?: "api" | "cli" }
   | { type: "session_redirected"; newSessionId: string }
   | { type: "slash_commands"; commands: SlashCommand[] }
