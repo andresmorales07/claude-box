@@ -19,6 +19,7 @@ import type {
   SlashCommand,
   PaginatedMessages,
   SessionListItem,
+  PermissionModeCommon,
 } from "./types.js";
 import { cleanMessageText } from "./message-cleanup.js";
 import { getToolSummary } from "./tool-summary.js";
@@ -158,6 +159,10 @@ function normalizeMessage(msg: SDKMessage, index: number, accumulatedThinking = 
 export class ClaudeAdapter implements ProviderAdapter {
   readonly name = "Claude Code";
   readonly id = "claude";
+  readonly modeTransitionTools: Map<string, PermissionModeCommon> = new Map([
+    ["ExitPlanMode", "default"],
+    ["EnterPlanMode", "plan"],
+  ]);
 
   async *run(
     options: ProviderSessionOptions,
@@ -220,6 +225,18 @@ export class ClaudeAdapter implements ProviderAdapter {
                     input,
                   });
                   if (decision.allow) {
+                    // Fire mode transition callback — gives sessions.ts a chance to update
+                    // currentPermissionMode and push mode_changed WS event before the SDK continues.
+                    if (options.onModeChanged) {
+                      const transitionMode = this.modeTransitionTools.get(toolName) ?? null;
+                      if (transitionMode !== null) {
+                        try {
+                          options.onModeChanged(transitionMode);
+                        } catch (err) {
+                          console.error("claude-adapter: onModeChanged callback failed:", err);
+                        }
+                      }
+                    }
                     // ExitPlanMode and EnterPlanMode need updatedPermissions
                     // (containing setMode transitions) even without alwaysAllow,
                     // otherwise the SDK clears context and restarts the query

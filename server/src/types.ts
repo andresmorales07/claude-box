@@ -20,6 +20,7 @@ export interface ActiveSession {
   cwd: string;
   createdAt: Date;
   permissionMode: PermissionModeCommon;
+  currentPermissionMode: PermissionModeCommon;
   model: string | undefined;
   abortController: AbortController;
   pendingApproval: PendingApproval | null;
@@ -32,20 +33,23 @@ export interface PendingApproval {
   toolName: string;
   toolUseId: string;
   input: unknown;
+  targetMode?: PermissionModeCommon;
   resolve: (decision: ApprovalDecision) => void;
 }
 
 export type ClientMessage =
   | { type: "prompt"; text: string }
-  | { type: "approve"; toolUseId: string; alwaysAllow?: boolean; answers?: Record<string, string> }
+  | { type: "approve"; toolUseId: string; alwaysAllow?: boolean; answers?: Record<string, string>; targetMode?: string; clearContext?: boolean }
   | { type: "deny"; toolUseId: string; message?: string }
-  | { type: "interrupt" };
+  | { type: "interrupt" }
+  | { type: "set_mode"; mode: string };
 
 export type ServerMessage =
   | { type: "message"; message: NormalizedMessage }
-  | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown }
+  | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown; targetMode?: string }
+  | { type: "mode_changed"; mode: PermissionModeCommon }
   | { type: "status"; status: SessionStatus; error?: string; source?: "api" | "cli" }
-  | { type: "session_redirected"; newSessionId: string }
+  | { type: "session_redirected"; newSessionId: string; fresh?: boolean }
   | { type: "slash_commands"; commands: SlashCommand[] }
   | { type: "thinking_delta"; text: string }
   | { type: "replay_complete"; totalMessages?: number; oldestIndex?: number }

@@ -130,6 +130,25 @@ declare const CompactBoundaryEventSchema: z.ZodObject<{
     }>;
     preTokens: z.ZodNumber;
 }, z.core.$strip>;
+export declare const PermissionModeCommonSchema: z.ZodEnum<{
+    default: "default";
+    acceptEdits: "acceptEdits";
+    bypassPermissions: "bypassPermissions";
+    plan: "plan";
+    delegate: "delegate";
+    dontAsk: "dontAsk";
+}>;
+export declare const ModeChangedEventSchema: z.ZodObject<{
+    type: z.ZodLiteral<"mode_changed">;
+    mode: z.ZodEnum<{
+        default: "default";
+        acceptEdits: "acceptEdits";
+        bypassPermissions: "bypassPermissions";
+        plan: "plan";
+        delegate: "delegate";
+        dontAsk: "dontAsk";
+    }>;
+}, z.core.$strip>;
 export declare const SystemEventSchema: z.ZodObject<{
     role: z.ZodLiteral<"system">;
     event: z.ZodDiscriminatedUnion<[z.ZodObject<{
@@ -387,14 +406,6 @@ export declare const SessionListItemSchema: z.ZodObject<{
     lastModified: z.ZodString;
     createdAt: z.ZodString;
 }, z.core.$strip>;
-export declare const PermissionModeCommonSchema: z.ZodEnum<{
-    default: "default";
-    acceptEdits: "acceptEdits";
-    bypassPermissions: "bypassPermissions";
-    plan: "plan";
-    delegate: "delegate";
-    dontAsk: "dontAsk";
-}>;
 export type TextPart = z.infer<typeof TextPartSchema>;
 export type ToolSummary = z.infer<typeof ToolSummarySchema>;
 export type ToolUsePart = z.infer<typeof ToolUsePartSchema>;
@@ -416,4 +427,5 @@ export type SubagentStartedEvent = z.infer<typeof SubagentStartedEventSchema>;
 export type SubagentToolCallEvent = z.infer<typeof SubagentToolCallEventSchema>;
 export type SubagentCompletedEvent = z.infer<typeof SubagentCompletedEventSchema>;
 export type CompactBoundaryEvent = z.infer<typeof CompactBoundaryEventSchema>;
+export type ModeChangedEvent = z.infer<typeof ModeChangedEventSchema>;
 export {};

@@ -1,5 +1,6 @@
 import { authenticateToken } from "./auth.js";
-import { getActiveSession, handleApproval, sendFollowUp, interruptSession, getWatcher } from "./sessions.js";
+import { getActiveSession, handleApproval, sendFollowUp, interruptSession, getWatcher, createSession } from "./sessions.js";
+import { PermissionModeCommonSchema } from "./schemas/providers.js";
 const WS_PATH_RE = /^\/api\/sessions\/([0-9a-f-]{36})\/stream$/;
 const AUTH_TIMEOUT_MS = 10_000;
 export function extractSessionIdFromPath(pathname) {
@@ -75,11 +76,13 @@ function setupSessionConnection(ws, sessionId, messageLimit) {
     }));
     // Send pending approval for API sessions
     if (activeSession?.pendingApproval) {
+        const { toolName, toolUseId, input, targetMode } = activeSession.pendingApproval;
         ws.send(JSON.stringify({
             type: "tool_approval_request",
-            toolName: activeSession.pendingApproval.toolName,
-            toolUseId: activeSession.pendingApproval.toolUseId,
-            input: activeSession.pendingApproval.input,
+            toolName,
+            toolUseId,
+            input,
+            ...(targetMode ? { targetMode } : {}),
         }));
     }
     // Heartbeat: protocol-level ping detects dead clients, JSON ping keeps client watchdog alive.
@@ -133,16 +136,57 @@ function setupSessionConnection(ws, sessionId, messageLimit) {
                     }
                 }
                 const alwaysAllow = parsed.alwaysAllow === true;
-                if (!handleApproval(session, parsed.toolUseId, true, undefined, answers, alwaysAllow)) {
+                const clearContext = parsed.clearContext === true;
+                const rawTargetMode = parsed.targetMode;
+                const targetMode = rawTargetMode !== undefined && PermissionModeCommonSchema.options.includes(rawTargetMode)
+                    ? rawTargetMode
+                    : undefined;
+                const approvalResult = handleApproval(session, parsed.toolUseId, true, {
+                    alwaysAllow,
+                    answers,
+                    targetMode,
+                    clearContext,
+                });
+                if (!approvalResult) {
                     ws.send(JSON.stringify({ type: "error", message: "no matching pending approval" }));
+                }
+                else if (typeof approvalResult === "object" && approvalResult.clearContext) {
+                    try {
+                        const newSession = await createSession({ cwd: approvalResult.cwd, permissionMode: approvalResult.newMode });
+                        // Interrupt the old session AFTER the new one is created so that any
+                        // in-flight SDK work doesn't corrupt state before the redirect completes.
+                        interruptSession(session.sessionId);
+                        watcher.pushEvent(session.sessionId, { type: "session_redirected", newSessionId: newSession.id, fresh: true });
+                    }
+                    catch (err) {
+                        console.error(`Failed to create session for clearContext redirect:`, err);
+                        ws.send(JSON.stringify({ type: "error", message: "failed to create new session for context clear" }));
+                    }
                 }
                 break;
             }
             case "deny":
-                if (!handleApproval(session, parsed.toolUseId, false, parsed.message)) {
+                if (!handleApproval(session, parsed.toolUseId, false, { message: parsed.message })) {
                     ws.send(JSON.stringify({ type: "error", message: "no matching pending approval" }));
                 }
                 break;
+            case "set_mode": {
+                if (!PermissionModeCommonSchema.options.includes(parsed.mode)) {
+                    // ignore invalid mode
+                    break;
+                }
+                if (session.status !== "idle" && session.status !== "completed" && session.status !== "interrupted") {
+                    ws.send(JSON.stringify({ type: "error", message: "cannot change mode while session is running" }));
+                    break;
+                }
+                if (parsed.mode === "bypassPermissions" && process.env.ALLOW_BYPASS_PERMISSIONS !== "1") {
+                    ws.send(JSON.stringify({ type: "error", message: "bypassPermissions mode is disabled on this server" }));
+                    break;
+                }
+                session.currentPermissionMode = parsed.mode;
+                watcher.pushEvent(session.sessionId, { type: "mode_changed", mode: parsed.mode });
+                break;
+            }
             case "interrupt":
                 interruptSession(session.sessionId);
                 break;

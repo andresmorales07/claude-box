@@ -46,6 +46,7 @@ export type {
   SubagentStartedEvent,
   SubagentToolCallEvent,
   SubagentCompletedEvent,
+  ModeChangedEvent,
 } from "./providers.js";
 
 export {

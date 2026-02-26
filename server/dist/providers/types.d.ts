@@ -32,6 +32,7 @@ export interface ProviderSessionOptions {
         inputTokens: number;
         contextWindow: number;
     }) => void;
+    onModeChanged?: (newMode: PermissionModeCommon) => void;
 }
 export interface ProviderSessionResult {
     providerSessionId?: string;
@@ -57,4 +58,6 @@ export interface ProviderAdapter {
      *  Returns null for lines that don't produce a visible message.
      *  `index` is the caller-maintained message counter. */
     normalizeFileLine(line: string, index: number): NormalizedMessage | null;
+    /** Maps tool names to the permission mode they transition to on approval. */
+    readonly modeTransitionTools?: Map<string, PermissionModeCommon>;
 }

@@ -59,6 +59,7 @@ export const SessionSummaryDTOSchema = z
     slug: z.string().nullable(),
     summary: z.string().nullable(),
     cwd: z.string(),
+    permissionMode: PermissionModeCommonSchema,
   })
   .openapi("SessionSummaryDTO");
 

@@ -114,6 +114,17 @@ const CompactBoundaryEventSchema = z.object({
   preTokens: z.number().int().nonnegative(),
 });
 
+// ── Permission mode (defined here so ModeChangedEventSchema can reference it) ──
+
+export const PermissionModeCommonSchema = z
+  .enum(["default", "acceptEdits", "bypassPermissions", "plan", "delegate", "dontAsk"])
+  .openapi("PermissionModeCommon");
+
+export const ModeChangedEventSchema = z.object({
+  type: z.literal("mode_changed"),
+  mode: PermissionModeCommonSchema,
+});
+
 export const SystemEventSchema = z
   .object({
     role: z.literal("system"),
@@ -203,12 +214,6 @@ export const SessionListItemSchema = z
   })
   .openapi("SessionListItem");
 
-// ── Permission mode ──
-
-export const PermissionModeCommonSchema = z
-  .enum(["default", "acceptEdits", "bypassPermissions", "plan", "delegate", "dontAsk"])
-  .openapi("PermissionModeCommon");
-
 // ── Inferred types ──
 
 export type TextPart = z.infer<typeof TextPartSchema>;
@@ -232,3 +237,4 @@ export type SubagentStartedEvent = z.infer<typeof SubagentStartedEventSchema>;
 export type SubagentToolCallEvent = z.infer<typeof SubagentToolCallEventSchema>;
 export type SubagentCompletedEvent = z.infer<typeof SubagentCompletedEventSchema>;
 export type CompactBoundaryEvent = z.infer<typeof CompactBoundaryEventSchema>;
+export type ModeChangedEvent = z.infer<typeof ModeChangedEventSchema>;

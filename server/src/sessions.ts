@@ -75,6 +75,7 @@ export function listSessions(): SessionSummaryDTO[] {
     slug: null,
     summary: null,
     cwd: s.cwd,
+    permissionMode: s.currentPermissionMode,
   }));
 }
 
@@ -124,6 +125,9 @@ export async function listSessionsWithHistory(cwd?: string): Promise<SessionSumm
       slug: h.slug,
       summary: h.summary,
       cwd: h.cwd,
+      // History sessions were created outside the API; their original permission mode is not
+      // stored in the JSONL file. Default to "default" as a conservative fallback.
+      permissionMode: "default",
     });
   }
 
@@ -174,6 +178,7 @@ export async function createSession(
     cwd: req.cwd ?? (process.env.DEFAULT_CWD ?? process.cwd()),
     createdAt: new Date(),
     permissionMode: req.permissionMode ?? "default",
+    currentPermissionMode: req.permissionMode ?? "default",
     model: req.model,
     abortController: new AbortController(),
     pendingApproval: null,
@@ -215,6 +220,7 @@ async function runSession(
     // Creates the WatchedSession entry if no client has subscribed yet.
     watcher.setMode(session.sessionId, "push", session.cwd);
     watcher.pushEvent(session.sessionId, { type: "status", status: "running" });
+    watcher.pushEvent(session.sessionId, { type: "mode_changed", mode: session.currentPermissionMode });
 
     const adapter = getProvider(session.provider);
     const generator = adapter.run({
@@ -231,10 +237,12 @@ async function runSession(
           return Promise.resolve({ allow: true as const });
         }
         return new Promise((resolve) => {
+          const targetMode = adapter.modeTransitionTools?.get(request.toolName);
           session.pendingApproval = {
             toolName: request.toolName,
             toolUseId: request.toolUseId,
             input: request.input,
+            ...(targetMode ? { targetMode } : {}),
             resolve,
           };
           session.status = "waiting_for_approval";
@@ -247,6 +255,7 @@ async function runSession(
             toolName: request.toolName,
             toolUseId: request.toolUseId,
             input: request.input,
+            ...(targetMode ? { targetMode } : {}),
           });
         });
       },
@@ -279,6 +288,10 @@ async function runSession(
           status: info.status,
           summary: info.summary,
         });
+      },
+      onModeChanged: (newMode: PermissionModeCommon) => {
+        session.currentPermissionMode = newMode;
+        watcher!.pushEvent(session.sessionId, { type: "mode_changed", mode: newMode });
       },
       onCompacting: (isCompacting) => {
         watcher!.pushEvent(session.sessionId, { type: "compacting", isCompacting });
@@ -428,14 +441,20 @@ export function deleteSession(id: string): boolean {
   return true;
 }
 
+export interface HandleApprovalOptions {
+  message?: string;
+  answers?: Record<string, string>;
+  alwaysAllow?: boolean;
+  targetMode?: PermissionModeCommon;
+  clearContext?: boolean;
+}
+
 export function handleApproval(
   session: ActiveSession,
   toolUseId: string,
   allow: boolean,
-  message?: string,
-  answers?: Record<string, string>,
-  alwaysAllow?: boolean,
-): boolean {
+  options?: HandleApprovalOptions,
+): boolean | { clearContext: true; newMode: PermissionModeCommon; cwd: string } {
   if (
     !session.pendingApproval ||
     session.pendingApproval.toolUseId !== toolUseId
@@ -452,6 +471,7 @@ export function handleApproval(
   }
 
   if (allow) {
+    const { alwaysAllow, answers, targetMode, clearContext } = options ?? {};
     if (alwaysAllow) {
       session.alwaysAllowedTools.add(approval.toolName);
     }
@@ -464,8 +484,11 @@ export function handleApproval(
       }
     }
     approval.resolve({ allow: true, updatedInput, alwaysAllow });
+    if (clearContext && targetMode) {
+      return { clearContext: true, newMode: targetMode, cwd: session.cwd };
+    }
   } else {
-    approval.resolve({ allow: false, message: message ?? "Denied by user" });
+    approval.resolve({ allow: false, message: options?.message ?? "Denied by user" });
   }
   return true;
 }
@@ -482,7 +505,7 @@ export async function sendFollowUp(
   runSession(
     session,
     text,
-    session.permissionMode,
+    session.currentPermissionMode,
     session.model,
     undefined,
     isFirstMessage ? undefined : session.sessionId,

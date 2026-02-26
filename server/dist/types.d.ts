@@ -13,6 +13,7 @@ export interface ActiveSession {
     cwd: string;
     createdAt: Date;
     permissionMode: PermissionModeCommon;
+    currentPermissionMode: PermissionModeCommon;
     model: string | undefined;
     abortController: AbortController;
     pendingApproval: PendingApproval | null;
@@ -24,6 +25,7 @@ export interface PendingApproval {
     toolName: string;
     toolUseId: string;
     input: unknown;
+    targetMode?: PermissionModeCommon;
     resolve: (decision: ApprovalDecision) => void;
 }
 export type ClientMessage = {
@@ -34,12 +36,17 @@ export type ClientMessage = {
     toolUseId: string;
     alwaysAllow?: boolean;
     answers?: Record<string, string>;
+    targetMode?: string;
+    clearContext?: boolean;
 } | {
     type: "deny";
     toolUseId: string;
     message?: string;
 } | {
     type: "interrupt";
+} | {
+    type: "set_mode";
+    mode: string;
 };
 export type ServerMessage = {
     type: "message";
@@ -49,6 +56,10 @@ export type ServerMessage = {
     toolName: string;
     toolUseId: string;
     input: unknown;
+    targetMode?: string;
+} | {
+    type: "mode_changed";
+    mode: PermissionModeCommon;
 } | {
     type: "status";
     status: SessionStatus;
@@ -57,6 +68,7 @@ export type ServerMessage = {
 } | {
     type: "session_redirected";
     newSessionId: string;
+    fresh?: boolean;
 } | {
     type: "slash_commands";
     commands: SlashCommand[];

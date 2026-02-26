@@ -1,13 +1,14 @@
 import { create } from "zustand";
 import { useAuthStore } from "./auth";
 import { useSessionsStore } from "./sessions";
-import type { NormalizedMessage, SlashCommand, ExtractedTask, ToolSummary } from "@shared/types";
+import type { NormalizedMessage, SlashCommand, ExtractedTask, ToolSummary, PermissionModeCommonCommon } from "@shared/types";
 
 type ServerMessage =
   | { type: "message"; message: NormalizedMessage }
-  | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown }
+  | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown; targetMode?: string }
   | { type: "status"; status: string; error?: string; source?: "api" | "cli" }
-  | { type: "session_redirected"; newSessionId: string }
+  | { type: "session_redirected"; newSessionId: string; fresh?: boolean }
+  | { type: "mode_changed"; mode: string }
   | { type: "slash_commands"; commands: SlashCommand[] }
   | { type: "thinking_delta"; text: string }
   | { type: "replay_complete"; totalMessages?: number; oldestIndex?: number }
@@ -52,6 +53,7 @@ interface PendingApproval {
   toolName: string;
   toolUseId: string;
   input: unknown;
+  targetMode?: string;
 }
 
 interface MessagesState {
@@ -84,6 +86,9 @@ interface MessagesState {
   // Git diff stats
   gitDiffStat: GitDiffStat | null;
 
+  // Current permission mode
+  currentMode: PermissionModeCommon | null;
+
   connect: (sessionId: string) => void;
   disconnect: () => void;
   sendPrompt: (text: string) => boolean;
@@ -92,6 +97,8 @@ interface MessagesState {
   deny: (toolUseId: string, message?: string) => void;
   interrupt: () => void;
   loadOlderMessages: () => void;
+  setMode: (mode: PermissionModeCommon) => void;
+  approvePlan: (toolUseId: string, opts: { targetMode: string; clearContext: boolean; answers?: Record<string, string> }) => void;
 }
 
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -151,6 +158,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   isCompacting: false,
   contextUsage: null,
   gitDiffStat: null,
+  currentMode: null,
 
   connect: (sessionId: string) => {
     // After a session redirect, the WebSocket is already connected to the
@@ -187,7 +195,15 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
       isCompacting: false,
       contextUsage: null,
       gitDiffStat: null,
+      currentMode: null,
     });
+
+    // Initialize currentMode from session DTO before WS events arrive
+    const sessStore = useSessionsStore.getState();
+    const initialSession = sessStore.sessions.find((s) => s.id === sessionId);
+    if (initialSession?.permissionMode) {
+      set({ currentMode: initialSession.permissionMode });
+    }
 
     const doConnect = () => {
       if (currentSessionId !== sessionId) return;
@@ -298,17 +314,17 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
             break;
           }
           case "session_redirected": {
-            // Server remapped our temp session ID to the real provider ID.
-            // Update our reference and navigate the UI — the WebSocket is
-            // already remapped by the watcher so we don't need to reconnect.
             const newId = msg.newSessionId;
             currentSessionId = newId;
             clearTimeout(_redirectTimeout);
-            _redirectingTo = newId;
-            // Safety: clear the redirect flag after 5s if connect() hasn't consumed it
-            _redirectTimeout = setTimeout(() => {
-              if (_redirectingTo === newId) _redirectingTo = null;
-            }, 5000);
+            if (!msg.fresh) {
+              // Session ID remap (CLI→API): WS is already connected to the new ID internally.
+              // Prevent disconnect/reconnect during React navigation.
+              _redirectingTo = newId;
+              _redirectTimeout = setTimeout(() => {
+                if (_redirectingTo === newId) _redirectingTo = null;
+              }, 5000);
+            }
             const sessStore = useSessionsStore.getState();
             sessStore.setActiveSession(newId);
             sessStore.fetchSessions();
@@ -321,8 +337,16 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
               thinkingStartTime: thinkingStart,
             }));
             break;
+          case "mode_changed":
+            set({ currentMode: msg.mode });
+            break;
           case "tool_approval_request":
-            set({ pendingApproval: { toolName: msg.toolName, toolUseId: msg.toolUseId, input: msg.input } });
+            set({ pendingApproval: {
+              toolName: msg.toolName,
+              toolUseId: msg.toolUseId,
+              input: msg.input,
+              ...(msg.targetMode ? { targetMode: msg.targetMode } : {}),
+            }});
             break;
           case "slash_commands":
             if (Array.isArray(msg.commands)) set({ slashCommands: msg.commands });
@@ -570,5 +594,21 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   },
 
   interrupt: () => send({ type: "interrupt" }),
+
+  setMode: (mode: PermissionModeCommon) => {
+    if (!send({ type: "set_mode", mode })) {
+      set({ lastError: "Failed to set mode — not connected" });
+      return;
+    }
+    set({ currentMode: mode }); // optimistic update
+  },
+
+  approvePlan: (toolUseId, { targetMode, clearContext, answers }) => {
+    if (!send({ type: "approve", toolUseId, targetMode, clearContext, ...(answers ? { answers } : {}) })) {
+      set({ lastError: "Failed to send approval — not connected" });
+      return;
+    }
+    set({ pendingApproval: null });
+  },
 
 }));

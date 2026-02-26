@@ -336,6 +336,119 @@ function SwipeableToolApproval({ toolName, toolUseId, input, onApprove, onApprov
   );
 }
 
+export interface PlanTransitionCardProps {
+  toolUseId: string;
+  planContent: string | null;
+  onApprove: (toolUseId: string, opts: { targetMode: string; clearContext: boolean; answers?: Record<string, string> }) => void;
+  onDeny: (toolUseId: string, message?: string) => void;
+}
+
+export function PlanTransitionCard({ toolUseId, planContent, onApprove, onDeny }: PlanTransitionCardProps) {
+  const [selectedMode, setSelectedMode] = useState<"acceptEdits" | "default" | null>(null);
+  const [clearContext, setClearContext] = useState(false);
+  const [keepPlanningText, setKeepPlanningText] = useState("");
+  const [isKeepPlanning, setIsKeepPlanning] = useState(false);
+
+  const canProceed = selectedMode !== null;
+  const canKeepPlanning = keepPlanningText.trim().length > 0;
+
+  return (
+    <div className="mx-4 my-2 bg-card border border-blue-500/40 shadow-lg rounded-xl overflow-hidden">
+      {/* Header */}
+      <div className="px-4 pt-4 pb-3 border-b border-border">
+        <div className="font-semibold text-blue-400 mb-1">
+          Plan Ready
+        </div>
+        <p className="text-xs text-muted-foreground">Claude has finished planning. Choose how to proceed.</p>
+      </div>
+
+      {/* Plan content — scrollable if present */}
+      {planContent !== null && (
+        <div className="px-4 py-3 border-b border-border max-h-48 overflow-y-auto">
+          <pre className="text-xs text-foreground/80 whitespace-pre-wrap font-mono leading-relaxed">{planContent}</pre>
+        </div>
+      )}
+
+      {/* Implementation mode selection */}
+      <div className="px-4 py-3 border-b border-border space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">How to implement:</p>
+        {[
+          { value: "acceptEdits" as const, label: "Auto-accept edits", description: "File changes applied automatically; Bash commands still need approval" },
+          { value: "default" as const, label: "Approve each change", description: "Review and approve every file edit and command" },
+        ].map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => setSelectedMode(opt.value)}
+            className={cn(
+              "w-full flex flex-col gap-0.5 px-3 py-2 rounded-lg border text-left transition-colors",
+              selectedMode === opt.value
+                ? "border-blue-500/60 bg-blue-500/10 text-foreground"
+                : "border-border bg-input text-muted-foreground hover:border-blue-500/40 hover:text-foreground"
+            )}
+          >
+            <span className="text-sm font-semibold">{opt.label}</span>
+            <span className="text-xs opacity-70">{opt.description}</span>
+          </button>
+        ))}
+
+        {/* Clear context checkbox */}
+        <label className="flex items-center gap-2 px-1 pt-1 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={clearContext}
+            onChange={(e) => setClearContext(e.target.checked)}
+            className="rounded accent-blue-500"
+          />
+          <span className="text-xs text-muted-foreground">Also clear context (start a fresh session)</span>
+        </label>
+      </div>
+
+      {/* Keep planning section */}
+      <div className="px-4 py-3 space-y-2">
+        <button
+          onClick={() => setIsKeepPlanning(!isKeepPlanning)}
+          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+        >
+          {isKeepPlanning ? "▲ Cancel — I want to proceed" : "▼ Keep planning instead"}
+        </button>
+        {isKeepPlanning && (
+          <textarea
+            value={keepPlanningText}
+            onChange={(e) => setKeepPlanningText(e.target.value)}
+            placeholder="Tell Claude what to focus on or reconsider..."
+            className="w-full px-3 py-2 rounded-lg border border-border bg-input text-foreground text-sm font-[inherit] resize-none outline-none focus:border-ring placeholder:text-muted-foreground"
+            rows={2}
+          />
+        )}
+      </div>
+
+      {/* Action buttons */}
+      <div className="px-4 pb-4 flex gap-2">
+        {!isKeepPlanning ? (
+          <Button
+            size="sm"
+            onClick={() => canProceed && onApprove(toolUseId, { targetMode: selectedMode!, clearContext })}
+            disabled={!canProceed}
+            className="h-10 bg-blue-600 hover:bg-blue-500 text-white"
+          >
+            Proceed
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            onClick={() => canKeepPlanning && onDeny(toolUseId, keepPlanningText.trim())}
+            disabled={!canKeepPlanning}
+            className="h-10"
+            variant="outline"
+          >
+            Keep Planning
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ToolApproval({ toolName, toolUseId, input, onApprove, onApproveAlways, onDeny }: Props) {
   const isDesktop = useIsDesktop();
 

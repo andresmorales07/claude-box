@@ -40,10 +40,11 @@ export class SessionWatcher {
             const compactingSnapshot = watched.isCompacting;
             const contextUsageSnapshot = watched.lastContextUsage;
             const gitDiffStatSnapshot = watched.lastGitDiffStat;
+            const lastModeSnapshot = watched.lastMode;
             // Replay from best available source (buffered events are sent before
             // replay_complete inside the replay methods)
             if (watched.messages.length > 0) {
-                this.replayFromMemory(watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot);
+                this.replayFromMemory(watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot, lastModeSnapshot);
             }
             else {
                 // Re-resolve file path if it was null at initial subscribe time
@@ -52,7 +53,7 @@ export class SessionWatcher {
                     if (filePath)
                         watched.filePath = filePath;
                 }
-                await this.replayFromFile(sessionId, watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot);
+                await this.replayFromFile(sessionId, watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot, lastModeSnapshot);
             }
             return;
         }
@@ -73,6 +74,7 @@ export class SessionWatcher {
             lastContextUsage: null,
             lastGitDiffStat: null,
             cwd: null,
+            lastMode: null,
         };
         this.sessions.set(sessionId, watched);
         // Resolve file path via adapter (async)
@@ -194,6 +196,10 @@ export class SessionWatcher {
         if (event.type === "thinking_delta") {
             watched.pendingThinkingText += event.text;
         }
+        // Buffer permission mode transitions for late subscribers
+        if (event.type === "mode_changed") {
+            watched.lastMode = event.mode;
+        }
         // Buffer compacting and context usage state for late subscribers
         if (event.type === "compacting") {
             watched.isCompacting = event.isCompacting;
@@ -263,6 +269,7 @@ export class SessionWatcher {
                 lastContextUsage: null,
                 lastGitDiffStat: null,
                 cwd: cwd ?? null,
+                lastMode: null,
             };
             this.sessions.set(sessionId, watched);
         }
@@ -329,7 +336,7 @@ export class SessionWatcher {
      * pagination via messageLimit (returns the most recent N messages).
      * Buffered ephemeral state is sent before replay_complete.
      */
-    replayFromMemory(watched, client, messageLimit, pendingThinking, subagentsSnapshot, isCompacting, contextUsage, gitDiffStat) {
+    replayFromMemory(watched, client, messageLimit, pendingThinking, subagentsSnapshot, isCompacting, contextUsage, gitDiffStat, lastMode) {
         const allMessages = watched.messages;
         const total = allMessages.length;
         // Apply limit: take the most recent N messages
@@ -353,6 +360,9 @@ export class SessionWatcher {
         if (gitDiffStat) {
             this.send(client, { type: "git_diff_stat", ...gitDiffStat });
         }
+        if (lastMode) {
+            this.send(client, { type: "mode_changed", mode: lastMode });
+        }
         this.send(client, {
             type: "replay_complete",
             totalMessages: total,
@@ -364,7 +374,7 @@ export class SessionWatcher {
      * sync watcher state and send replay_complete.
      * Buffered ephemeral state is sent before replay_complete.
      */
-    async replayFromFile(sessionId, watched, client, messageLimit, pendingThinking, subagentsSnapshot, isCompacting, contextUsage, gitDiffStat) {
+    async replayFromFile(sessionId, watched, client, messageLimit, pendingThinking, subagentsSnapshot, isCompacting, contextUsage, gitDiffStat, lastMode) {
         // No file to replay (e.g., test adapter) — just signal replay is done
         if (!watched.filePath) {
             if (pendingThinking) {
@@ -377,6 +387,8 @@ export class SessionWatcher {
                 this.send(client, { type: "context_usage", ...contextUsage });
             if (gitDiffStat)
                 this.send(client, { type: "git_diff_stat", ...gitDiffStat });
+            if (lastMode)
+                this.send(client, { type: "mode_changed", mode: lastMode });
             this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
             return;
         }
@@ -409,6 +421,8 @@ export class SessionWatcher {
                     this.send(client, { type: "context_usage", ...contextUsage });
                 if (gitDiffStat)
                     this.send(client, { type: "git_diff_stat", ...gitDiffStat });
+                if (lastMode)
+                    this.send(client, { type: "mode_changed", mode: lastMode });
                 this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
                 return;
             }
@@ -423,6 +437,8 @@ export class SessionWatcher {
                 this.send(client, { type: "context_usage", ...contextUsage });
             if (gitDiffStat)
                 this.send(client, { type: "git_diff_stat", ...gitDiffStat });
+            if (lastMode)
+                this.send(client, { type: "mode_changed", mode: lastMode });
             this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
             throw err;
         }
@@ -456,6 +472,8 @@ export class SessionWatcher {
             this.send(client, { type: "context_usage", ...contextUsage });
         if (gitDiffStat)
             this.send(client, { type: "git_diff_stat", ...gitDiffStat });
+        if (lastMode)
+            this.send(client, { type: "mode_changed", mode: lastMode });
         this.send(client, {
             type: "replay_complete",
             totalMessages: result.totalMessages,
