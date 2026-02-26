@@ -14,6 +14,7 @@ import { ContextUsageBadge } from "@/components/ContextUsageBadge";
 import { CompactingIndicator } from "@/components/CompactingIndicator";
 import { ArrowDown, ArrowLeft, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PERMISSION_MODES } from "@/lib/sessions";
 import { TaskList } from "@/components/TaskList";
 import type { ToolResultPart, ExtractedTask, TaskStatus } from "@shared/types";
 
@@ -226,12 +227,7 @@ export function ChatPage() {
             </Badge>
             {showModeSwitcher && (
               <div className="absolute right-0 top-full mt-1 z-50 min-w-[160px] bg-card border border-border rounded-lg shadow-xl overflow-hidden">
-                {[
-                  { value: "default", label: "Default" },
-                  { value: "plan", label: "Plan" },
-                  { value: "acceptEdits", label: "Accept Edits" },
-                  { value: "bypassPermissions", label: "Auto" },
-                ].map((mode) => (
+                {PERMISSION_MODES.map((mode) => (
                   <button
                     key={mode.value}
                     className={cn(

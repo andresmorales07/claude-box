@@ -356,9 +356,8 @@ export function PlanTransitionCard({ toolUseId, planContent, onApprove, onDeny }
     <div className="mx-4 my-2 bg-card border border-blue-500/40 shadow-lg rounded-xl overflow-hidden">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-border">
-        <div className="font-semibold text-blue-400 mb-1 flex items-center gap-2">
-          <span>📋</span>
-          <span>Plan Ready</span>
+        <div className="font-semibold text-blue-400 mb-1">
+          Plan Ready
         </div>
         <p className="text-xs text-muted-foreground">Claude has finished planning. Choose how to proceed.</p>
       </div>

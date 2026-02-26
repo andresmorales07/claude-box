@@ -1,6 +1,6 @@
 import { open, stat } from "node:fs/promises";
 import type { WebSocket } from "ws";
-import type { ProviderAdapter, NormalizedMessage, ToolSummary } from "./providers/types.js";
+import type { ProviderAdapter, NormalizedMessage, ToolSummary, PermissionModeCommon } from "./providers/types.js";
 import type { ServerMessage, ContextUsage } from "./types.js";
 import type { GitDiffStat } from "./schemas/git.js";
 import { computeGitDiffStat } from "./git-status.js";
@@ -61,6 +61,13 @@ interface WatchedSession {
 
   /** Session working directory — needed for triggering git diff from poll mode. */
   cwd: string | null;
+
+  /**
+   * Last known permission mode from a mode_changed event.
+   * Sent to late-connecting subscribers so they see the correct mode badge
+   * even if they missed the live mode_changed event. Null until first transition.
+   */
+  lastMode: PermissionModeCommon | null;
 }
 
 /**
@@ -108,17 +115,18 @@ export class SessionWatcher {
       const compactingSnapshot = watched.isCompacting;
       const contextUsageSnapshot = watched.lastContextUsage;
       const gitDiffStatSnapshot = watched.lastGitDiffStat;
+      const lastModeSnapshot = watched.lastMode;
       // Replay from best available source (buffered events are sent before
       // replay_complete inside the replay methods)
       if (watched.messages.length > 0) {
-        this.replayFromMemory(watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot);
+        this.replayFromMemory(watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot, lastModeSnapshot);
       } else {
         // Re-resolve file path if it was null at initial subscribe time
         if (!watched.filePath) {
           const filePath = await this.adapter.getSessionFilePath(sessionId);
           if (filePath) watched.filePath = filePath;
         }
-        await this.replayFromFile(sessionId, watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot);
+        await this.replayFromFile(sessionId, watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot, lastModeSnapshot);
       }
       return;
     }
@@ -140,6 +148,7 @@ export class SessionWatcher {
       lastContextUsage: null,
       lastGitDiffStat: null,
       cwd: null,
+      lastMode: null,
     };
     this.sessions.set(sessionId, watched);
 
@@ -269,6 +278,11 @@ export class SessionWatcher {
       watched.pendingThinkingText += event.text;
     }
 
+    // Buffer permission mode transitions for late subscribers
+    if (event.type === "mode_changed") {
+      watched.lastMode = (event as { type: "mode_changed"; mode: PermissionModeCommon }).mode;
+    }
+
     // Buffer compacting and context usage state for late subscribers
     if (event.type === "compacting") {
       watched.isCompacting = event.isCompacting;
@@ -341,6 +355,7 @@ export class SessionWatcher {
         lastContextUsage: null,
         lastGitDiffStat: null,
         cwd: cwd ?? null,
+        lastMode: null,
       };
       this.sessions.set(sessionId, watched);
     } else {
@@ -419,6 +434,7 @@ export class SessionWatcher {
     isCompacting?: boolean,
     contextUsage?: ContextUsage | null,
     gitDiffStat?: GitDiffStat | null,
+    lastMode?: PermissionModeCommon | null,
   ): void {
     const allMessages = watched.messages;
     const total = allMessages.length;
@@ -446,6 +462,9 @@ export class SessionWatcher {
     if (gitDiffStat) {
       this.send(client, { type: "git_diff_stat", ...gitDiffStat });
     }
+    if (lastMode) {
+      this.send(client, { type: "mode_changed", mode: lastMode });
+    }
     this.send(client, {
       type: "replay_complete",
       totalMessages: total,
@@ -468,6 +487,7 @@ export class SessionWatcher {
     isCompacting?: boolean,
     contextUsage?: ContextUsage | null,
     gitDiffStat?: GitDiffStat | null,
+    lastMode?: PermissionModeCommon | null,
   ): Promise<void> {
     // No file to replay (e.g., test adapter) — just signal replay is done
     if (!watched.filePath) {
@@ -478,6 +498,7 @@ export class SessionWatcher {
       if (isCompacting) this.send(client, { type: "compacting", isCompacting: true });
       if (contextUsage) this.send(client, { type: "context_usage", ...contextUsage });
       if (gitDiffStat) this.send(client, { type: "git_diff_stat", ...gitDiffStat });
+      if (lastMode) this.send(client, { type: "mode_changed", mode: lastMode });
       this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
       return;
     }
@@ -506,6 +527,7 @@ export class SessionWatcher {
         if (isCompacting) this.send(client, { type: "compacting", isCompacting: true });
         if (contextUsage) this.send(client, { type: "context_usage", ...contextUsage });
         if (gitDiffStat) this.send(client, { type: "git_diff_stat", ...gitDiffStat });
+        if (lastMode) this.send(client, { type: "mode_changed", mode: lastMode });
         this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
         return;
       }
@@ -517,6 +539,7 @@ export class SessionWatcher {
       if (isCompacting) this.send(client, { type: "compacting", isCompacting: true });
       if (contextUsage) this.send(client, { type: "context_usage", ...contextUsage });
       if (gitDiffStat) this.send(client, { type: "git_diff_stat", ...gitDiffStat });
+      if (lastMode) this.send(client, { type: "mode_changed", mode: lastMode });
       this.send(client, { type: "replay_complete", totalMessages: 0, oldestIndex: 0 });
       throw err;
     }
@@ -551,6 +574,7 @@ export class SessionWatcher {
     if (isCompacting) this.send(client, { type: "compacting", isCompacting: true });
     if (contextUsage) this.send(client, { type: "context_usage", ...contextUsage });
     if (gitDiffStat) this.send(client, { type: "git_diff_stat", ...gitDiffStat });
+    if (lastMode) this.send(client, { type: "mode_changed", mode: lastMode });
     this.send(client, {
       type: "replay_complete",
       totalMessages: result.totalMessages,

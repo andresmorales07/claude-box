@@ -175,7 +175,10 @@ function setupSessionConnection(ws: WebSocket, sessionId: string, messageLimit?:
         } else if (typeof approvalResult === "object" && approvalResult.clearContext) {
           try {
             const newSession = await createSession({ cwd: approvalResult.cwd, permissionMode: approvalResult.newMode });
-            watcher.pushEvent(session.sessionId, { type: "session_redirected", newSessionId: newSession.id });
+            // Interrupt the old session AFTER the new one is created so that any
+            // in-flight SDK work doesn't corrupt state before the redirect completes.
+            interruptSession(session.sessionId);
+            watcher.pushEvent(session.sessionId, { type: "session_redirected", newSessionId: newSession.id, fresh: true });
           } catch (err) {
             console.error(`Failed to create session for clearContext redirect:`, err);
             ws.send(JSON.stringify({ type: "error", message: "failed to create new session for context clear" } satisfies ServerMessage));
@@ -193,6 +196,14 @@ function setupSessionConnection(ws: WebSocket, sessionId: string, messageLimit?:
       case "set_mode": {
         if (!(PermissionModeCommonSchema.options as readonly string[]).includes(parsed.mode)) {
           // ignore invalid mode
+          break;
+        }
+        if (session.status !== "idle" && session.status !== "completed" && session.status !== "interrupted") {
+          ws.send(JSON.stringify({ type: "error", message: "cannot change mode while session is running" } satisfies ServerMessage));
+          break;
+        }
+        if (parsed.mode === "bypassPermissions" && process.env.ALLOW_BYPASS_PERMISSIONS !== "1") {
+          ws.send(JSON.stringify({ type: "error", message: "bypassPermissions mode is disabled on this server" } satisfies ServerMessage));
           break;
         }
         session.currentPermissionMode = parsed.mode as PermissionModeCommon;

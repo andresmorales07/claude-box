@@ -111,6 +111,8 @@ export async function listSessionsWithHistory(cwd) {
             slug: h.slug,
             summary: h.summary,
             cwd: h.cwd,
+            // History sessions were created outside the API; their original permission mode is not
+            // stored in the JSONL file. Default to "default" as a conservative fallback.
             permissionMode: "default",
         });
     }

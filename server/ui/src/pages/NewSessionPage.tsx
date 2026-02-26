@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessionsStore } from "@/stores/sessions";
+import { PERMISSION_MODES } from "@/lib/sessions";
 import { FolderPicker } from "@/components/FolderPicker";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -50,12 +51,7 @@ export function NewSessionPage() {
           <div>
             <label className="text-sm font-medium text-foreground mb-2 block">Permission Mode</label>
             <div className="grid grid-cols-4 gap-2">
-              {[
-                { value: "default", label: "Default", description: "Approve each action" },
-                { value: "plan", label: "Plan", description: "Read-only planning" },
-                { value: "acceptEdits", label: "Accept Edits", description: "Auto-accept file edits" },
-                { value: "bypassPermissions", label: "Auto", description: "Skip all approvals" },
-              ].map((mode) => (
+              {PERMISSION_MODES.map((mode) => (
                 <button
                   key={mode.value}
                   title={mode.description}

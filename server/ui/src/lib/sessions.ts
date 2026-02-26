@@ -1,3 +1,11 @@
+/** Ordered list of user-selectable permission modes shown in mode pickers and dropdowns. */
+export const PERMISSION_MODES = [
+  { value: "default", label: "Default", description: "Approve each action" },
+  { value: "plan", label: "Plan", description: "Read-only planning" },
+  { value: "acceptEdits", label: "Accept Edits", description: "Auto-accept file edits" },
+  { value: "bypassPermissions", label: "Auto", description: "Skip all approvals" },
+] as const;
+
 export function groupByDate<T extends { lastModified: string; createdAt: string }>(items: T[]) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();

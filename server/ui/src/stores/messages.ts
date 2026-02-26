@@ -1,9 +1,7 @@
 import { create } from "zustand";
 import { useAuthStore } from "./auth";
 import { useSessionsStore } from "./sessions";
-import type { NormalizedMessage, SlashCommand, ExtractedTask, ToolSummary } from "@shared/types";
-
-type PermissionMode = string; // "default" | "acceptEdits" | "bypassPermissions" | "plan" | "delegate" | "dontAsk"
+import type { NormalizedMessage, SlashCommand, ExtractedTask, ToolSummary, PermissionModeCommonCommon } from "@shared/types";
 
 type ServerMessage =
   | { type: "message"; message: NormalizedMessage }
@@ -89,7 +87,7 @@ interface MessagesState {
   gitDiffStat: GitDiffStat | null;
 
   // Current permission mode
-  currentMode: PermissionMode | null;
+  currentMode: PermissionModeCommon | null;
 
   connect: (sessionId: string) => void;
   disconnect: () => void;
@@ -99,7 +97,7 @@ interface MessagesState {
   deny: (toolUseId: string, message?: string) => void;
   interrupt: () => void;
   loadOlderMessages: () => void;
-  setMode: (mode: PermissionMode) => void;
+  setMode: (mode: PermissionModeCommon) => void;
   approvePlan: (toolUseId: string, opts: { targetMode: string; clearContext: boolean; answers?: Record<string, string> }) => void;
 }
 
@@ -597,7 +595,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
 
   interrupt: () => send({ type: "interrupt" }),
 
-  setMode: (mode: PermissionMode) => {
+  setMode: (mode: PermissionModeCommon) => {
     if (!send({ type: "set_mode", mode })) {
       set({ lastError: "Failed to set mode — not connected" });
       return;

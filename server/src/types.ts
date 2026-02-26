@@ -49,7 +49,7 @@ export type ServerMessage =
   | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown; targetMode?: string }
   | { type: "mode_changed"; mode: PermissionModeCommon }
   | { type: "status"; status: SessionStatus; error?: string; source?: "api" | "cli" }
-  | { type: "session_redirected"; newSessionId: string }
+  | { type: "session_redirected"; newSessionId: string; fresh?: boolean }
   | { type: "slash_commands"; commands: SlashCommand[] }
   | { type: "thinking_delta"; text: string }
   | { type: "replay_complete"; totalMessages?: number; oldestIndex?: number }

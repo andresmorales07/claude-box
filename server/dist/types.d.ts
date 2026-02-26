@@ -68,6 +68,7 @@ export type ServerMessage = {
 } | {
     type: "session_redirected";
     newSessionId: string;
+    fresh?: boolean;
 } | {
     type: "slash_commands";
     commands: SlashCommand[];
