@@ -33,6 +33,17 @@ interface ContentBlock {
   thinking?: string;
 }
 
+function parseCompactBoundaryMeta(meta: unknown): { trigger: "manual" | "auto"; preTokens: number } {
+  const m = meta as { trigger?: string; pre_tokens?: number } | undefined;
+  if (!m?.trigger || typeof m?.pre_tokens !== "number") {
+    console.warn("claude-adapter: compact_boundary missing compact_metadata fields", { trigger: m?.trigger, pre_tokens: m?.pre_tokens });
+  }
+  return {
+    trigger: m?.trigger === "manual" ? "manual" : "auto",
+    preTokens: typeof m?.pre_tokens === "number" ? m.pre_tokens : 0,
+  };
+}
+
 function normalizeAssistant(msg: SDKAssistantMessage, index: number, accumulatedThinking = ""): NormalizedMessage | null {
   const content = msg.message?.content;
   if (!Array.isArray(content)) return null;
@@ -333,12 +344,7 @@ export class ClaudeAdapter implements ProviderAdapter {
             }
           } else if (sysMsg.subtype === "compact_boundary") {
             // SDKCompactBoundaryMessage: marks where context was compacted
-            const meta = sysMsg.compact_metadata as { trigger?: string; pre_tokens?: number } | undefined;
-            if (!meta?.trigger || typeof meta?.pre_tokens !== "number") {
-              console.warn("claude-adapter: compact_boundary missing compact_metadata fields", { trigger: meta?.trigger, pre_tokens: meta?.pre_tokens });
-            }
-            const trigger = meta?.trigger === "manual" ? "manual" : "auto";
-            const preTokens = typeof meta?.pre_tokens === "number" ? meta.pre_tokens : 0;
+            const { trigger, preTokens } = parseCompactBoundaryMeta(sysMsg.compact_metadata);
             const compactMsg: NormalizedMessage = {
               role: "system",
               event: { type: "compact_boundary", trigger, preTokens },
@@ -512,12 +518,7 @@ export class ClaudeAdapter implements ProviderAdapter {
 
         // Handle compact_boundary system lines
         if (type === "system" && parsed.subtype === "compact_boundary") {
-          const meta = parsed.compact_metadata as { trigger?: string; pre_tokens?: number } | undefined;
-          if (!meta?.trigger || typeof meta?.pre_tokens !== "number") {
-            console.warn("claude-adapter: compact_boundary missing compact_metadata fields", { trigger: meta?.trigger, pre_tokens: meta?.pre_tokens });
-          }
-          const trigger = meta?.trigger === "manual" ? "manual" : "auto";
-          const preTokens = typeof meta?.pre_tokens === "number" ? meta.pre_tokens : 0;
+          const { trigger, preTokens } = parseCompactBoundaryMeta(parsed.compact_metadata);
           messages.push({
             role: "system",
             event: { type: "compact_boundary", trigger, preTokens },
@@ -659,12 +660,7 @@ export class ClaudeAdapter implements ProviderAdapter {
 
     // Handle compact_boundary system lines from JSONL
     if (type === "system" && parsed.subtype === "compact_boundary") {
-      const meta = parsed.compact_metadata as { trigger?: string; pre_tokens?: number } | undefined;
-      if (!meta?.trigger || typeof meta?.pre_tokens !== "number") {
-        console.warn("claude-adapter: compact_boundary missing compact_metadata fields", { trigger: meta?.trigger, pre_tokens: meta?.pre_tokens });
-      }
-      const trigger = meta?.trigger === "manual" ? "manual" : "auto";
-      const preTokens = typeof meta?.pre_tokens === "number" ? meta.pre_tokens : 0;
+      const { trigger, preTokens } = parseCompactBoundaryMeta(parsed.compact_metadata);
       return { role: "system", event: { type: "compact_boundary", trigger, preTokens }, index };
     }
 
