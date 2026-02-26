@@ -75,6 +75,7 @@ export function listSessions(): SessionSummaryDTO[] {
     slug: null,
     summary: null,
     cwd: s.cwd,
+    permissionMode: s.currentPermissionMode,
   }));
 }
 
@@ -124,6 +125,7 @@ export async function listSessionsWithHistory(cwd?: string): Promise<SessionSumm
       slug: h.slug,
       summary: h.summary,
       cwd: h.cwd,
+      permissionMode: "default",
     });
   }
 
@@ -174,6 +176,7 @@ export async function createSession(
     cwd: req.cwd ?? (process.env.DEFAULT_CWD ?? process.cwd()),
     createdAt: new Date(),
     permissionMode: req.permissionMode ?? "default",
+    currentPermissionMode: req.permissionMode ?? "default",
     model: req.model,
     abortController: new AbortController(),
     pendingApproval: null,
