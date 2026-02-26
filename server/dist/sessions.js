@@ -63,6 +63,7 @@ export function listSessions() {
         slug: null,
         summary: null,
         cwd: s.cwd,
+        permissionMode: s.currentPermissionMode,
     }));
 }
 export async function listSessionsWithHistory(cwd) {
@@ -110,6 +111,7 @@ export async function listSessionsWithHistory(cwd) {
             slug: h.slug,
             summary: h.summary,
             cwd: h.cwd,
+            permissionMode: "default",
         });
     }
     // Sort by lastModified descending
@@ -147,6 +149,7 @@ export async function createSession(req) {
         cwd: req.cwd ?? (process.env.DEFAULT_CWD ?? process.cwd()),
         createdAt: new Date(),
         permissionMode: req.permissionMode ?? "default",
+        currentPermissionMode: req.permissionMode ?? "default",
         model: req.model,
         abortController: new AbortController(),
         pendingApproval: null,

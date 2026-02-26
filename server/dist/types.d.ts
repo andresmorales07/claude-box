@@ -13,6 +13,7 @@ export interface ActiveSession {
     cwd: string;
     createdAt: Date;
     permissionMode: PermissionModeCommon;
+    currentPermissionMode: PermissionModeCommon;
     model: string | undefined;
     abortController: AbortController;
     pendingApproval: PendingApproval | null;
@@ -49,6 +50,10 @@ export type ServerMessage = {
     toolName: string;
     toolUseId: string;
     input: unknown;
+    targetMode?: string;
+} | {
+    type: "mode_changed";
+    mode: PermissionModeCommon;
 } | {
     type: "status";
     status: SessionStatus;

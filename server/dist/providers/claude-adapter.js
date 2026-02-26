@@ -121,6 +121,10 @@ function normalizeMessage(msg, index, accumulatedThinking = "") {
 export class ClaudeAdapter {
     name = "Claude Code";
     id = "claude";
+    modeTransitionTools = new Map([
+        ["ExitPlanMode", "default"],
+        ["EnterPlanMode", "plan"],
+    ]);
     async *run(options) {
         // Per-invocation index counter (safe for concurrent sessions)
         let messageIndex = 0;
@@ -169,6 +173,19 @@ export class ClaudeAdapter {
                                 input,
                             });
                             if (decision.allow) {
+                                // Fire mode transition callback — gives sessions.ts a chance to update
+                                // currentPermissionMode and push mode_changed WS event before the SDK continues.
+                                if (options.onModeChanged) {
+                                    const transitionMode = this.modeTransitionTools.get(toolName) ?? null;
+                                    if (transitionMode !== null) {
+                                        try {
+                                            options.onModeChanged(transitionMode);
+                                        }
+                                        catch (err) {
+                                            console.error("claude-adapter: onModeChanged callback failed:", err);
+                                        }
+                                    }
+                                }
                                 // ExitPlanMode and EnterPlanMode need updatedPermissions
                                 // (containing setMode transitions) even without alwaysAllow,
                                 // otherwise the SDK clears context and restarts the query

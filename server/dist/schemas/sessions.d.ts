@@ -47,6 +47,14 @@ export declare const SessionSummaryDTOSchema: z.ZodObject<{
     slug: z.ZodNullable<z.ZodString>;
     summary: z.ZodNullable<z.ZodString>;
     cwd: z.ZodString;
+    permissionMode: z.ZodEnum<{
+        default: "default";
+        acceptEdits: "acceptEdits";
+        bypassPermissions: "bypassPermissions";
+        plan: "plan";
+        delegate: "delegate";
+        dontAsk: "dontAsk";
+    }>;
 }, z.core.$strip>;
 export declare const SessionDetailResponseSchema: z.ZodObject<{
     id: z.ZodString;
