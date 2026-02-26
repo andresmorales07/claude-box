@@ -13,6 +13,7 @@ export interface SessionSummary {
   slug: string | null;
   summary: string | null;
   cwd: string;
+  permissionMode: string;
 }
 
 interface SessionsState {
@@ -33,7 +34,7 @@ interface SessionsState {
   setWorkspaceFilter: (filter: string | null) => void;
   fetchConfig: () => Promise<void>;
   fetchSessions: () => Promise<void>;
-  createSession: (opts: { prompt?: string; cwd: string }) => Promise<string | null>;
+  createSession: (opts: { prompt?: string; cwd: string; permissionMode?: string }) => Promise<string | null>;
   deleteSession: (id: string) => Promise<boolean>;
 }
 
@@ -83,11 +84,12 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     }
   },
 
-  createSession: async ({ prompt, cwd }) => {
+  createSession: async ({ prompt, cwd, permissionMode }) => {
     const { token } = useAuthStore.getState();
     try {
       const body: Record<string, string> = { cwd };
       if (prompt) body.prompt = prompt;
+      if (permissionMode) body.permissionMode = permissionMode;
       const res = await fetch("/api/sessions", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

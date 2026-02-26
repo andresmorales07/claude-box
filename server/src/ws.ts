@@ -1,8 +1,10 @@
 import type { WebSocket } from "ws";
 import { authenticateToken } from "./auth.js";
 
-import { getActiveSession, handleApproval, sendFollowUp, interruptSession, getWatcher } from "./sessions.js";
+import { getActiveSession, handleApproval, sendFollowUp, interruptSession, getWatcher, createSession } from "./sessions.js";
 import type { ClientMessage, ServerMessage } from "./types.js";
+import type { PermissionModeCommon } from "./providers/types.js";
+import { PermissionModeCommonSchema } from "./schemas/providers.js";
 
 const WS_PATH_RE = /^\/api\/sessions\/([0-9a-f-]{36})\/stream$/;
 
@@ -91,11 +93,13 @@ function setupSessionConnection(ws: WebSocket, sessionId: string, messageLimit?:
 
   // Send pending approval for API sessions
   if (activeSession?.pendingApproval) {
+    const { toolName, toolUseId, input, targetMode } = activeSession.pendingApproval;
     ws.send(JSON.stringify({
       type: "tool_approval_request",
-      toolName: activeSession.pendingApproval.toolName,
-      toolUseId: activeSession.pendingApproval.toolUseId,
-      input: activeSession.pendingApproval.input,
+      toolName,
+      toolUseId,
+      input,
+      ...(targetMode ? { targetMode } : {}),
     } satisfies ServerMessage));
   }
 
@@ -154,17 +158,47 @@ function setupSessionConnection(ws: WebSocket, sessionId: string, messageLimit?:
           }
         }
         const alwaysAllow = parsed.alwaysAllow === true;
-        if (!handleApproval(session, parsed.toolUseId, true, undefined, answers, alwaysAllow)) {
+        const clearContext = parsed.clearContext === true;
+        const rawTargetMode = parsed.targetMode;
+        const targetMode: PermissionModeCommon | undefined =
+          rawTargetMode !== undefined && (PermissionModeCommonSchema.options as readonly string[]).includes(rawTargetMode)
+            ? rawTargetMode as PermissionModeCommon
+            : undefined;
+        const approvalResult = handleApproval(session, parsed.toolUseId, true, {
+          alwaysAllow,
+          answers,
+          targetMode,
+          clearContext,
+        });
+        if (!approvalResult) {
           ws.send(JSON.stringify({ type: "error", message: "no matching pending approval" } satisfies ServerMessage));
+        } else if (typeof approvalResult === "object" && approvalResult.clearContext) {
+          try {
+            const newSession = await createSession({ cwd: approvalResult.cwd, permissionMode: approvalResult.newMode });
+            watcher.pushEvent(session.sessionId, { type: "session_redirected", newSessionId: newSession.id });
+          } catch (err) {
+            console.error(`Failed to create session for clearContext redirect:`, err);
+            ws.send(JSON.stringify({ type: "error", message: "failed to create new session for context clear" } satisfies ServerMessage));
+          }
         }
         break;
       }
 
       case "deny":
-        if (!handleApproval(session, parsed.toolUseId, false, parsed.message)) {
+        if (!handleApproval(session, parsed.toolUseId, false, { message: parsed.message })) {
           ws.send(JSON.stringify({ type: "error", message: "no matching pending approval" } satisfies ServerMessage));
         }
         break;
+
+      case "set_mode": {
+        if (!(PermissionModeCommonSchema.options as readonly string[]).includes(parsed.mode)) {
+          // ignore invalid mode
+          break;
+        }
+        session.currentPermissionMode = parsed.mode as PermissionModeCommon;
+        watcher.pushEvent(session.sessionId, { type: "mode_changed", mode: parsed.mode as PermissionModeCommon });
+        break;
+      }
 
       case "interrupt":
         interruptSession(session.sessionId);

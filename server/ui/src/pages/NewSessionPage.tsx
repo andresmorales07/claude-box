@@ -5,12 +5,14 @@ import { FolderPicker } from "@/components/FolderPicker";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
+import { cn } from "@/lib/utils";
 
 export function NewSessionPage() {
   const { cwd, browseRoot, setCwd, createSession, lastError } = useSessionsStore();
   const [prompt, setPrompt] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [permissionMode, setPermissionMode] = useState("default");
   const navigate = useNavigate();
 
   const handleCreate = async () => {
@@ -18,7 +20,7 @@ export function NewSessionPage() {
     setCreating(true);
     setError(null);
     try {
-      const sessionId = await createSession({ prompt: prompt.trim() || undefined, cwd });
+      const sessionId = await createSession({ prompt: prompt.trim() || undefined, cwd, permissionMode });
       if (sessionId) {
         navigate(`/session/${sessionId}`, { replace: true });
       } else {
@@ -43,6 +45,31 @@ export function NewSessionPage() {
             <label className="text-sm font-medium text-foreground mb-2 block">Working Directory</label>
             <div className="rounded-lg border border-border overflow-hidden">
               <FolderPicker cwd={cwd} browseRoot={browseRoot} onCwdChange={setCwd} />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-foreground mb-2 block">Permission Mode</label>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { value: "default", label: "Default", description: "Approve each action" },
+                { value: "plan", label: "Plan", description: "Read-only planning" },
+                { value: "acceptEdits", label: "Accept Edits", description: "Auto-accept file edits" },
+                { value: "bypassPermissions", label: "Auto", description: "Skip all approvals" },
+              ].map((mode) => (
+                <button
+                  key={mode.value}
+                  title={mode.description}
+                  onClick={() => setPermissionMode(mode.value)}
+                  className={cn(
+                    "px-3 py-2 rounded-lg border text-sm font-medium transition-colors",
+                    permissionMode === mode.value
+                      ? "bg-primary/15 border-primary text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  )}
+                >
+                  {mode.label}
+                </button>
+              ))}
             </div>
           </div>
           <div>

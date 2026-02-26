@@ -138,7 +138,7 @@ export declare const PermissionModeCommonSchema: z.ZodEnum<{
     delegate: "delegate";
     dontAsk: "dontAsk";
 }>;
-declare const ModeChangedEventSchema: z.ZodObject<{
+export declare const ModeChangedEventSchema: z.ZodObject<{
     type: z.ZodLiteral<"mode_changed">;
     mode: z.ZodEnum<{
         default: "default";

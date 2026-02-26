@@ -177,6 +177,7 @@ async function runSession(session, prompt, permissionMode, model, allowedTools, 
         // Creates the WatchedSession entry if no client has subscribed yet.
         watcher.setMode(session.sessionId, "push", session.cwd);
         watcher.pushEvent(session.sessionId, { type: "status", status: "running" });
+        watcher.pushEvent(session.sessionId, { type: "mode_changed", mode: session.currentPermissionMode });
         const adapter = getProvider(session.provider);
         const generator = adapter.run({
             prompt,
@@ -192,10 +193,12 @@ async function runSession(session, prompt, permissionMode, model, allowedTools, 
                     return Promise.resolve({ allow: true });
                 }
                 return new Promise((resolve) => {
+                    const targetMode = adapter.modeTransitionTools?.get(request.toolName);
                     session.pendingApproval = {
                         toolName: request.toolName,
                         toolUseId: request.toolUseId,
                         input: request.input,
+                        ...(targetMode ? { targetMode } : {}),
                         resolve,
                     };
                     session.status = "waiting_for_approval";
@@ -208,6 +211,7 @@ async function runSession(session, prompt, permissionMode, model, allowedTools, 
                         toolName: request.toolName,
                         toolUseId: request.toolUseId,
                         input: request.input,
+                        ...(targetMode ? { targetMode } : {}),
                     });
                 });
             },
@@ -240,6 +244,10 @@ async function runSession(session, prompt, permissionMode, model, allowedTools, 
                     status: info.status,
                     summary: info.summary,
                 });
+            },
+            onModeChanged: (newMode) => {
+                session.currentPermissionMode = newMode;
+                watcher.pushEvent(session.sessionId, { type: "mode_changed", mode: newMode });
             },
             onCompacting: (isCompacting) => {
                 watcher.pushEvent(session.sessionId, { type: "compacting", isCompacting });
@@ -386,7 +394,7 @@ export function deleteSession(id) {
     }
     return true;
 }
-export function handleApproval(session, toolUseId, allow, message, answers, alwaysAllow) {
+export function handleApproval(session, toolUseId, allow, options) {
     if (!session.pendingApproval ||
         session.pendingApproval.toolUseId !== toolUseId)
         return false;
@@ -400,6 +408,7 @@ export function handleApproval(session, toolUseId, allow, message, answers, alwa
         console.error(`handleApproval(${session.sessionId}): watcher not initialized — status update not sent`);
     }
     if (allow) {
+        const { alwaysAllow, answers, targetMode, clearContext } = options ?? {};
         if (alwaysAllow) {
             session.alwaysAllowedTools.add(approval.toolName);
         }
@@ -413,9 +422,12 @@ export function handleApproval(session, toolUseId, allow, message, answers, alwa
             }
         }
         approval.resolve({ allow: true, updatedInput, alwaysAllow });
+        if (clearContext && targetMode) {
+            return { clearContext: true, newMode: targetMode, cwd: session.cwd };
+        }
     }
     else {
-        approval.resolve({ allow: false, message: message ?? "Denied by user" });
+        approval.resolve({ allow: false, message: options?.message ?? "Denied by user" });
     }
     return true;
 }
@@ -425,6 +437,6 @@ export async function sendFollowUp(session, text) {
     }
     session.abortController = new AbortController();
     const isFirstMessage = session.status === "idle";
-    runSession(session, text, session.permissionMode, session.model, undefined, isFirstMessage ? undefined : session.sessionId);
+    runSession(session, text, session.currentPermissionMode, session.model, undefined, isFirstMessage ? undefined : session.sessionId);
     return true;
 }

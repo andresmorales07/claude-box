@@ -120,7 +120,7 @@ export const PermissionModeCommonSchema = z
   .enum(["default", "acceptEdits", "bypassPermissions", "plan", "delegate", "dontAsk"])
   .openapi("PermissionModeCommon");
 
-const ModeChangedEventSchema = z.object({
+export const ModeChangedEventSchema = z.object({
   type: z.literal("mode_changed"),
   mode: PermissionModeCommonSchema,
 });

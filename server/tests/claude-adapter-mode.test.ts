@@ -95,6 +95,39 @@ describe("ClaudeAdapter onModeChanged", () => {
     expect(onModeChanged).toHaveBeenCalledWith("plan");
   });
 
+  it("does not call onModeChanged when a mode-transition tool is denied", async () => {
+    let capturedCanUseTool: ((name: string, input: Record<string, unknown>, opts: { toolUseID: string; suggestions?: unknown[] }) => Promise<unknown>) | undefined;
+
+    const mockHandle = {
+      [Symbol.asyncIterator]: async function* () { /* empty */ },
+      supportedCommands: vi.fn().mockResolvedValue([]),
+    };
+
+    vi.mocked(mockQuery).mockImplementation((opts: any) => {
+      capturedCanUseTool = opts.options?.canUseTool;
+      return mockHandle as any;
+    });
+
+    const adapter = new ClaudeAdapter();
+    const onModeChanged = vi.fn();
+
+    const gen = adapter.run({
+      prompt: "test",
+      cwd: "/tmp",
+      permissionMode: "plan",
+      abortSignal: new AbortController().signal,
+      onToolApproval: async () => ({ allow: false as const }),
+      onModeChanged,
+    });
+
+    for await (const _ of gen) { /* empty */ }
+
+    expect(capturedCanUseTool).toBeDefined();
+    await capturedCanUseTool!("ExitPlanMode", {}, { toolUseID: "tu-deny", suggestions: [] });
+
+    expect(onModeChanged).not.toHaveBeenCalled();
+  });
+
   it("does not call onModeChanged for other tools", async () => {
     let capturedCanUseTool: ((name: string, input: Record<string, unknown>, opts: { toolUseID: string; suggestions?: unknown[] }) => Promise<unknown>) | undefined;
 

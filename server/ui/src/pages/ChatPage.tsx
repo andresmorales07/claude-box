@@ -4,7 +4,7 @@ import { useMessagesStore } from "@/stores/messages";
 import { useSessionsStore } from "@/stores/sessions";
 import { useIsDesktop } from "@/hooks/useMediaQuery";
 import { MessageBubble } from "@/components/MessageBubble";
-import { ToolApproval } from "@/components/ToolApproval";
+import { ToolApproval, PlanTransitionCard } from "@/components/ToolApproval";
 import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { Composer } from "@/components/Composer";
 import { GitDiffBar } from "@/components/GitDiffBar";
@@ -27,6 +27,20 @@ const statusStyles: Record<string, string> = {
   history: "bg-muted-foreground/10 text-muted-foreground italic border-transparent",
 };
 
+const modeStyles: Record<string, string> = {
+  plan: "bg-blue-500/15 text-blue-400 border-transparent",
+  acceptEdits: "bg-amber-500/15 text-amber-400 border-transparent",
+  bypassPermissions: "bg-red-500/15 text-red-400 border-transparent",
+  default: "bg-muted-foreground/15 text-muted-foreground border-transparent",
+};
+
+const modeLabels: Record<string, string> = {
+  plan: "Plan",
+  acceptEdits: "Accept Edits",
+  bypassPermissions: "Auto",
+  default: "Default",
+};
+
 const SCROLL_THRESHOLD = 100;
 const SCROLL_UP_TRIGGER = 200;
 
@@ -45,6 +59,7 @@ export function ChatPage() {
     thinkingText, thinkingStartTime,
     hasOlderMessages, loadingOlderMessages, loadOlderMessages, serverTasks,
     isCompacting, contextUsage, gitDiffStat,
+    currentMode, setMode, approvePlan,
     connect, disconnect, sendPrompt, approve, approveAlways, deny, interrupt,
   } = useMessagesStore();
   const activeSession = useSessionsStore((s) => s.sessions.find((sess) => sess.id === id));
@@ -58,8 +73,10 @@ export function ChatPage() {
 
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [dismissedError, setDismissedError] = useState<string | null>(null);
+  const [showModeSwitcher, setShowModeSwitcher] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const modeSwitcherRef = useRef<HTMLDivElement>(null);
   // Track previous message count for scroll preservation on prepend
   const prevMessagesLenRef = useRef(0);
   const prevScrollHeightRef = useRef(0);
@@ -162,6 +179,19 @@ export function ChatPage() {
     }
   }, [hasOlderMessages, loadingOlderMessages, loadOlderMessages]);
 
+  const canSwitchMode = status === "idle" || status === "completed" || status === "interrupted";
+
+  useEffect(() => {
+    if (!showModeSwitcher) return;
+    const handler = (e: MouseEvent) => {
+      if (!modeSwitcherRef.current?.contains(e.target as Node)) {
+        setShowModeSwitcher(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showModeSwitcher]);
+
   const isRunning = status === "running" || status === "starting";
   // Show indicator for the entire "running" phase — not just when thinking text streams in.
   // Thinking text provides detail; the indicator itself shows "Thinking" as a baseline.
@@ -181,6 +211,47 @@ export function ChatPage() {
         )}
         <span className="text-sm font-medium truncate flex-1">{sessionName}</span>
         {contextUsage && <ContextUsageBadge percentUsed={contextUsage.percentUsed} />}
+        {currentMode && (
+          <div className="relative" ref={modeSwitcherRef}>
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-xs font-semibold uppercase tracking-wide cursor-pointer select-none",
+                modeStyles[currentMode] || modeStyles.default,
+                canSwitchMode && "hover:ring-1 hover:ring-current"
+              )}
+              onClick={() => canSwitchMode && setShowModeSwitcher((v) => !v)}
+            >
+              {modeLabels[currentMode] || currentMode}
+            </Badge>
+            {showModeSwitcher && (
+              <div className="absolute right-0 top-full mt-1 z-50 min-w-[160px] bg-card border border-border rounded-lg shadow-xl overflow-hidden">
+                {[
+                  { value: "default", label: "Default" },
+                  { value: "plan", label: "Plan" },
+                  { value: "acceptEdits", label: "Accept Edits" },
+                  { value: "bypassPermissions", label: "Auto" },
+                ].map((mode) => (
+                  <button
+                    key={mode.value}
+                    className={cn(
+                      "w-full px-3 py-2 text-sm text-left transition-colors",
+                      currentMode === mode.value
+                        ? "bg-primary/10 text-primary font-semibold"
+                        : "text-foreground hover:bg-accent"
+                    )}
+                    onClick={() => {
+                      setMode(mode.value);
+                      setShowModeSwitcher(false);
+                    }}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <Badge variant="outline" className={cn("text-xs font-semibold uppercase tracking-wide", statusStyles[status])}>
           {status}
         </Badge>
@@ -240,14 +311,30 @@ export function ChatPage() {
 
       {/* Tool approval */}
       {pendingApproval && (
-        <ToolApproval
-          toolName={pendingApproval.toolName}
-          toolUseId={pendingApproval.toolUseId}
-          input={pendingApproval.input}
-          onApprove={approve}
-          onApproveAlways={approveAlways}
-          onDeny={deny}
-        />
+        pendingApproval.targetMode ? (
+          <PlanTransitionCard
+            toolUseId={pendingApproval.toolUseId}
+            planContent={
+              pendingApproval.input != null &&
+              typeof pendingApproval.input === "object" &&
+              "plan" in (pendingApproval.input as Record<string, unknown>) &&
+              typeof (pendingApproval.input as Record<string, unknown>).plan === "string"
+                ? (pendingApproval.input as Record<string, unknown>).plan as string
+                : null
+            }
+            onApprove={approvePlan}
+            onDeny={(toolUseId, message) => deny(toolUseId, message)}
+          />
+        ) : (
+          <ToolApproval
+            toolName={pendingApproval.toolName}
+            toolUseId={pendingApproval.toolUseId}
+            input={pendingApproval.input}
+            onApprove={approve}
+            onApproveAlways={approveAlways}
+            onDeny={deny}
+          />
+        )
       )}
 
       {/* Compacting indicator — shown while conversation is being compacted */}

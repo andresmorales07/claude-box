@@ -33,14 +33,16 @@ export interface PendingApproval {
   toolName: string;
   toolUseId: string;
   input: unknown;
+  targetMode?: PermissionModeCommon;
   resolve: (decision: ApprovalDecision) => void;
 }
 
 export type ClientMessage =
   | { type: "prompt"; text: string }
-  | { type: "approve"; toolUseId: string; alwaysAllow?: boolean; answers?: Record<string, string> }
+  | { type: "approve"; toolUseId: string; alwaysAllow?: boolean; answers?: Record<string, string>; targetMode?: string; clearContext?: boolean }
   | { type: "deny"; toolUseId: string; message?: string }
-  | { type: "interrupt" };
+  | { type: "interrupt" }
+  | { type: "set_mode"; mode: string };
 
 export type ServerMessage =
   | { type: "message"; message: NormalizedMessage }

@@ -1,4 +1,4 @@
-import type { ProviderAdapter } from "./providers/types.js";
+import type { ProviderAdapter, PermissionModeCommon } from "./providers/types.js";
 import type { ActiveSession, CreateSessionRequest, SessionSummaryDTO } from "./types.js";
 import { SessionWatcher } from "./session-watcher.js";
 /**
@@ -25,5 +25,16 @@ export declare function createSession(req: CreateSessionRequest): Promise<{
 export declare function interruptSession(id: string): boolean;
 export declare function clearSessions(): void;
 export declare function deleteSession(id: string): boolean;
-export declare function handleApproval(session: ActiveSession, toolUseId: string, allow: boolean, message?: string, answers?: Record<string, string>, alwaysAllow?: boolean): boolean;
+export interface HandleApprovalOptions {
+    message?: string;
+    answers?: Record<string, string>;
+    alwaysAllow?: boolean;
+    targetMode?: PermissionModeCommon;
+    clearContext?: boolean;
+}
+export declare function handleApproval(session: ActiveSession, toolUseId: string, allow: boolean, options?: HandleApprovalOptions): boolean | {
+    clearContext: true;
+    newMode: PermissionModeCommon;
+    cwd: string;
+};
 export declare function sendFollowUp(session: ActiveSession, text: string): Promise<boolean>;
