@@ -133,7 +133,6 @@ export const SystemEventSchema = z
       StatusEventSchema,
       SystemInitEventSchema,
       CompactBoundaryEventSchema,
-      ModeChangedEventSchema,
     ]),
     index: z.number().int(),
   })
