@@ -175,10 +175,15 @@ function setupSessionConnection(ws: WebSocket, sessionId: string, messageLimit?:
         } else if (typeof approvalResult === "object" && approvalResult.clearContext) {
           try {
             const newSession = await createSession({ cwd: approvalResult.cwd, permissionMode: approvalResult.newMode });
-            // Interrupt the old session AFTER the new one is created so that any
-            // in-flight SDK work doesn't corrupt state before the redirect completes.
-            interruptSession(session.sessionId);
             watcher.pushEvent(session.sessionId, { type: "session_redirected", newSessionId: newSession.id, fresh: true });
+            // Deny (not allow) was resolved in handleApproval so the SDK can write the
+            // denial to the subprocess stdin via its normal permission stream path.
+            // setImmediate defers the interrupt to the Node.js "check" phase, which runs
+            // after the current I/O (poll) phase where that stdin write completes. By the
+            // time SIGTERM fires, the subprocess has already received the denial and exited
+            // the permission-wait state — no "Tool permission stream closed" error.
+            const oldSessionId = session.sessionId;
+            setImmediate(() => interruptSession(oldSessionId));
           } catch (err) {
             console.error(`Failed to create session for clearContext redirect:`, err);
             ws.send(JSON.stringify({ type: "error", message: "failed to create new session for context clear" } satisfies ServerMessage));
