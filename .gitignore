@@ -20,6 +20,10 @@ docs/plans/
 # API server UI
 server/ui/node_modules/
 
+# Build artifacts (compiled by Dockerfile at build time, by prepublishOnly for npm)
+server/dist/
+server/public/
+
 # Worktrees
 .worktrees/
 
