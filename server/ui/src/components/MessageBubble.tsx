@@ -13,8 +13,9 @@ interface Props {
   toolResults: Map<string, ToolResultPart>;
 }
 
-// Tools rendered by special-purpose components — excluded from generic grouping
-function isGenericToolUse(part: ToolUsePart): boolean {
+// Tools rendered by special-purpose components — excluded from generic grouping.
+// Exported so ChatPage can use it when pre-grouping cross-message tool batches.
+export function isGenericToolUse(part: ToolUsePart): boolean {
   if (["TaskCreate", "TaskUpdate", "TaskList", "TaskGet"].includes(part.toolName)) return false;
   if (part.toolName === "Task") return false;
   if (part.toolName === "Write" || part.toolName === "Edit") return false;
@@ -167,8 +168,9 @@ function ToolRow({
   );
 }
 
-// Groups 2+ consecutive generic tool calls into a single collapsible card
-function ToolGroupCard({
+// Groups 2+ consecutive generic tool calls into a single collapsible card.
+// Exported so ChatPage can render cross-message tool batches directly.
+export function ToolGroupCard({
   toolUses,
   toolResults,
 }: {

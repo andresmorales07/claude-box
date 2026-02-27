@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useMessagesStore } from "@/stores/messages";
 import { useSessionsStore } from "@/stores/sessions";
 import { useIsDesktop } from "@/hooks/useMediaQuery";
-import { MessageBubble } from "@/components/MessageBubble";
+import { MessageBubble, ToolGroupCard, isGenericToolUse } from "@/components/MessageBubble";
 import { ToolApproval, PlanTransitionCard } from "@/components/ToolApproval";
 import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { Composer } from "@/components/Composer";
@@ -16,7 +16,7 @@ import { ArrowDown, ArrowLeft, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PERMISSION_MODES } from "@/lib/sessions";
 import { TaskList } from "@/components/TaskList";
-import type { ToolResultPart, ExtractedTask, TaskStatus } from "@shared/types";
+import type { NormalizedMessage, ToolResultPart, ToolUsePart, ExtractedTask, TaskStatus } from "@shared/types";
 
 const statusStyles: Record<string, string> = {
   idle: "bg-emerald-500/15 text-emerald-400 border-transparent",
@@ -43,6 +43,72 @@ const modeLabels: Record<string, string> = {
 };
 
 const SCROLL_THRESHOLD = 100;
+
+// Narrow the NormalizedMessage union to just the assistant variant (which has `parts`).
+type AssistantMessage = Extract<NormalizedMessage, { role: "assistant" }>;
+
+// Type predicate — qualifies an assistant message for cross-message batching:
+// no meaningful text, and every tool_use part is a generic tool (not Write/Edit/Task/…).
+function isToolOnlyAssistantMessage(msg: NormalizedMessage): msg is AssistantMessage {
+  if (msg.role !== "assistant") return false;
+  if (msg.parts.some((p) => p.type === "text" && p.text.trim().length > 0)) return false;
+  const toolParts = msg.parts.filter((p) => p.type === "tool_use");
+  return toolParts.length > 0 && toolParts.every((p) => isGenericToolUse(p as ToolUsePart));
+}
+
+type RenderItem =
+  | { kind: "message"; msg: NormalizedMessage }
+  | { kind: "tool_batch"; toolUses: ToolUsePart[]; key: string };
+
+// Collapse consecutive tool-only assistant messages (separated only by invisible
+// tool_result user messages) into a single tool_batch render item.
+function buildRenderItems(messages: NormalizedMessage[]): RenderItem[] {
+  const items: RenderItem[] = [];
+  let i = 0;
+
+  while (i < messages.length) {
+    const msg = messages[i];
+
+    if (isToolOnlyAssistantMessage(msg)) {
+      const batchMsgs: AssistantMessage[] = [msg];
+      let j = i + 1;
+
+      // Look ahead: skip invisible tool_result user messages and collect more tool-only assistant messages
+      while (j < messages.length) {
+        const next = messages[j];
+        if (next.role === "user" && next.parts.every((p) => p.type === "tool_result")) {
+          j++;
+        } else if (isToolOnlyAssistantMessage(next)) {
+          batchMsgs.push(next);
+          j++;
+        } else {
+          break;
+        }
+      }
+
+      if (batchMsgs.length > 1) {
+        // Multiple consecutive tool-only messages → single ToolGroupCard
+        const toolUses: ToolUsePart[] = [];
+        for (const m of batchMsgs) {
+          for (const p of m.parts) {
+            if (p.type === "tool_use") toolUses.push(p as ToolUsePart);
+          }
+        }
+        items.push({ kind: "tool_batch", toolUses, key: `${msg.role}-${msg.index}` });
+        i = j; // advance past all consumed messages (batch + skipped user messages)
+      } else {
+        // Only one tool-only message — render normally so MessageBubble handles it
+        items.push({ kind: "message", msg });
+        i++;
+      }
+    } else {
+      items.push({ kind: "message", msg });
+      i++;
+    }
+  }
+
+  return items;
+}
 const SCROLL_UP_TRIGGER = 200;
 
 const VALID_TASK_STATUSES = new Set<TaskStatus>(["pending", "in_progress", "completed", "deleted"]);
@@ -83,6 +149,8 @@ export function ChatPage() {
   const prevScrollHeightRef = useRef(0);
   // Flag to suppress auto-scroll after prepending older messages
   const justPrependedRef = useRef(false);
+
+  const renderItems = useMemo(() => buildRenderItems(messages), [messages]);
 
   const toolResults = useMemo(() => {
     const map = new Map<string, ToolResultPart>();
@@ -268,13 +336,21 @@ export function ChatPage() {
                 <Loader2 className="size-5 animate-spin text-muted-foreground" />
               </div>
             )}
-            {messages.map((msg) => (
-              <MessageBubble
-                key={`${msg.role}-${msg.index}`}
-                message={msg}
-                toolResults={toolResults}
-              />
-            ))}
+            {renderItems.map((item) =>
+              item.kind === "tool_batch" ? (
+                <ToolGroupCard
+                  key={item.key}
+                  toolUses={item.toolUses}
+                  toolResults={toolResults}
+                />
+              ) : (
+                <MessageBubble
+                  key={`${item.msg.role}-${item.msg.index}`}
+                  message={item.msg}
+                  toolResults={toolResults}
+                />
+              )
+            )}
             <div ref={messagesEndRef} />
           </div>
         </div>
