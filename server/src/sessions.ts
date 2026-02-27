@@ -481,10 +481,16 @@ export function handleApproval(
         updatedInput = { answers };
       }
     }
-    approval.resolve({ allow: true, updatedInput, alwaysAllow });
     if (clearContext && targetMode) {
+      // Deny the tool so the SDK delivers the denial to the subprocess cleanly.
+      // Allowing and then immediately aborting races with the permission stream write,
+      // causing "Tool permission stream closed before response received". By denying,
+      // the SDK sends the denial through the permission stream (no abort needed), and
+      // the old session winds down naturally after one more Claude turn.
+      approval.resolve({ allow: false, message: "Context cleared — continuing in a fresh session" });
       return { clearContext: true, newMode: targetMode, cwd: session.cwd };
     }
+    approval.resolve({ allow: true, updatedInput, alwaysAllow });
   } else {
     approval.resolve({ allow: false, message: options?.message ?? "Denied by user" });
   }
