@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessionsStore } from "@/stores/sessions";
+import type { PermissionModeCommon } from "@shared/types";
 import { PERMISSION_MODES } from "@/lib/sessions";
 import { FolderPicker } from "@/components/FolderPicker";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ export function NewSessionPage() {
   const [prompt, setPrompt] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [permissionMode, setPermissionMode] = useState("default");
+  const [permissionMode, setPermissionMode] = useState<PermissionModeCommon>("default");
   const navigate = useNavigate();
 
   const handleCreate = async () => {

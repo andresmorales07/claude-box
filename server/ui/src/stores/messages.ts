@@ -8,7 +8,7 @@ type ServerMessage =
   | { type: "tool_approval_request"; toolName: string; toolUseId: string; input: unknown; targetMode?: string }
   | { type: "status"; status: string; error?: string; source?: "api" | "cli" }
   | { type: "session_redirected"; newSessionId: string; fresh?: boolean }
-  | { type: "mode_changed"; mode: string }
+  | { type: "mode_changed"; mode: PermissionModeCommon }
   | { type: "slash_commands"; commands: SlashCommand[] }
   | { type: "thinking_delta"; text: string }
   | { type: "replay_complete"; totalMessages?: number; oldestIndex?: number }

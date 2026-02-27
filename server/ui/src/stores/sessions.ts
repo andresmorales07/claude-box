@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { useAuthStore } from "./auth";
+import type { PermissionModeCommon } from "@shared/types";
 
 export interface SessionSummary {
   id: string;
@@ -13,7 +14,7 @@ export interface SessionSummary {
   slug: string | null;
   summary: string | null;
   cwd: string;
-  permissionMode: string;
+  permissionMode: PermissionModeCommon;
 }
 
 interface SessionsState {
@@ -34,7 +35,7 @@ interface SessionsState {
   setWorkspaceFilter: (filter: string | null) => void;
   fetchConfig: () => Promise<void>;
   fetchSessions: () => Promise<void>;
-  createSession: (opts: { prompt?: string; cwd: string; permissionMode?: string }) => Promise<string | null>;
+  createSession: (opts: { prompt?: string; cwd: string; permissionMode?: PermissionModeCommon }) => Promise<string | null>;
   deleteSession: (id: string) => Promise<boolean>;
 }
 
