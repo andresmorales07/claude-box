@@ -45,7 +45,7 @@ describe("CreateSessionRequestSchema", () => {
   });
 
   it("accepts all valid permission modes", () => {
-    for (const mode of ["default", "acceptEdits", "bypassPermissions", "plan", "delegate", "dontAsk"]) {
+    for (const mode of ["default", "acceptEdits", "bypassPermissions", "plan", "dontAsk"]) {
       const result = CreateSessionRequestSchema.safeParse({ permissionMode: mode });
       expect(result.success).toBe(true);
     }
