@@ -117,7 +117,7 @@ const CompactBoundaryEventSchema = z.object({
 // ── Permission mode (defined here so ModeChangedEventSchema can reference it) ──
 
 export const PermissionModeCommonSchema = z
-  .enum(["default", "acceptEdits", "bypassPermissions", "plan", "delegate", "dontAsk"])
+  .enum(["default", "acceptEdits", "bypassPermissions", "plan", "dontAsk"])
   .openapi("PermissionModeCommon");
 
 export const ModeChangedEventSchema = z.object({

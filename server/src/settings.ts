@@ -16,6 +16,8 @@ const DEFAULTS: Settings = {
   terminalFontSize: 14,
   terminalScrollback: 1000,
   terminalShell: "/bin/bash",
+  claudeEffort: "high",
+  // claudeModel intentionally absent (undefined = Auto / SDK default)
 };
 
 export async function readSettings(): Promise<Settings> {
@@ -37,7 +39,15 @@ export async function readSettings(): Promise<Settings> {
 
 export async function writeSettings(partial: Partial<Settings>): Promise<Settings> {
   const current = await readSettings();
-  const updated = { ...current, ...partial };
+  const merged = { ...current, ...partial };
+
+  // Strip null values — null is the wire sentinel for "clear this field" (e.g. claudeModel: null → Auto).
+  // JSON.stringify drops undefined but preserves null, so the UI sends null to distinguish
+  // "clear this field" from "don't change this field" (absent key).
+  const updated: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(merged)) {
+    if (value !== null) updated[key] = value;
+  }
 
   // Validate the merged result
   const result = SettingsSchema.safeParse(updated);

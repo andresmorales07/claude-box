@@ -23,7 +23,7 @@
     "lint:fix": "eslint src/ --fix"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.45",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.63",
     "@asteasolutions/zod-to-openapi": "^8.4.1",
     "node-pty": "^1.1.0",
     "ws": "^8.18.0",

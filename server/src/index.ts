@@ -7,7 +7,15 @@ import { WebSocketServer } from "ws";
 import { requirePassword, getRequestIp } from "./auth.js";
 import { handleRequest } from "./routes.js";
 import { handleWsConnection, extractSessionIdFromPath } from "./ws.js";
-import { handleTerminalWsConnection } from "./terminal-ws.js";
+// Lazy-imported — node-pty is a native addon only available inside the Docker container.
+// Dynamic import avoids crashing the module graph in environments without it (local dev, tests).
+let _terminalWs: typeof import("./terminal-ws.js") | null = null;
+async function getTerminalWs() {
+  if (!_terminalWs) {
+    _terminalWs = await import("./terminal-ws.js");
+  }
+  return _terminalWs;
+}
 import { initWatcher } from "./sessions.js";
 import { getProvider } from "./providers/index.js";
 
@@ -173,8 +181,14 @@ export function createApp() {
 
     // Terminal WebSocket — /api/terminal/stream
     if (url.pathname === "/api/terminal/stream") {
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        handleTerminalWsConnection(ws, ip);
+      wss.handleUpgrade(req, socket, head, async (ws) => {
+        try {
+          const { handleTerminalWsConnection } = await getTerminalWs();
+          handleTerminalWsConnection(ws, ip);
+        } catch (err) {
+          console.error("Terminal support unavailable (node-pty not installed):", (err as Error).message);
+          ws.close(1011, "terminal not available");
+        }
       });
       return;
     }

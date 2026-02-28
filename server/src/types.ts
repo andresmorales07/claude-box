@@ -21,6 +21,7 @@ export interface ActiveSession {
   permissionMode: PermissionModeCommon;
   currentPermissionMode: PermissionModeCommon;
   model: string | undefined;
+  effort: "low" | "medium" | "high" | "max" | undefined;
   abortController: AbortController;
   pendingApproval: PendingApproval | null;
   alwaysAllowedTools: Set<string>;

@@ -211,6 +211,7 @@ export class ClaudeAdapter implements ProviderAdapter {
             ? { allowDangerouslySkipPermissions: true }
             : {}),
           ...(options.model ? { model: options.model } : {}),
+          ...(options.effort ? { effort: options.effort } : {}),
           ...(options.allowedTools?.length
             ? { allowedTools: options.allowedTools }
             : {}),

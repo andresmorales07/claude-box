@@ -1,21 +1,34 @@
 import { create } from "zustand";
 import { useAuthStore } from "./auth";
 
+type ClaudeModel = "claude-haiku-4-5-20251001" | "claude-sonnet-4-6" | "claude-opus-4-6";
+type ClaudeEffort = "low" | "medium" | "high" | "max";
+
 export interface SettingsState {
   theme: "dark" | "light";
   terminalFontSize: number;
   terminalScrollback: number;
   terminalShell: string;
+  claudeModel: ClaudeModel | undefined;
+  claudeEffort: ClaudeEffort;
 
   fetchSettings: () => Promise<void>;
   updateSettings: (partial: Partial<Omit<SettingsState, "fetchSettings" | "updateSettings">>) => Promise<void>;
 }
+
+// NOTE: These lists must match server/src/schemas/settings.ts CLAUDE_MODELS and EFFORT_VALUES.
+// The UI bundle cannot import from the server schema directly (different package), so this
+// is a documented exception to the Zod-as-single-source-of-truth convention.
+const CLAUDE_MODELS: ClaudeModel[] = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"];
+const CLAUDE_EFFORTS: ClaudeEffort[] = ["low", "medium", "high", "max"];
 
 const DEFAULTS = {
   theme: "dark" as const,
   terminalFontSize: 14,
   terminalScrollback: 1000,
   terminalShell: "/bin/bash",
+  claudeModel: undefined as ClaudeModel | undefined,
+  claudeEffort: "high" as ClaudeEffort,
 };
 
 function applyTheme(theme: "dark" | "light"): void {
@@ -43,6 +56,12 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         terminalFontSize: data.terminalFontSize ?? DEFAULTS.terminalFontSize,
         terminalScrollback: data.terminalScrollback ?? DEFAULTS.terminalScrollback,
         terminalShell: data.terminalShell ?? DEFAULTS.terminalShell,
+        claudeModel: CLAUDE_MODELS.includes(data.claudeModel as ClaudeModel)
+          ? (data.claudeModel as ClaudeModel)
+          : undefined,
+        claudeEffort: CLAUDE_EFFORTS.includes(data.claudeEffort as ClaudeEffort)
+          ? (data.claudeEffort as ClaudeEffort)
+          : "high",
       });
       applyTheme(theme);
     } catch {
@@ -55,6 +74,13 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set(partial);
     if (partial.theme !== undefined) applyTheme(partial.theme);
 
+    // Convert undefined values to null for the wire format — JSON.stringify drops undefined
+    // but preserves null. The server treats null as "clear this field" (e.g. claudeModel: null → Auto).
+    const wire: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(partial)) {
+      wire[key] = value === undefined ? null : value;
+    }
+
     const token = useAuthStore.getState().token;
     try {
       await fetch("/api/settings", {
@@ -63,7 +89,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(partial),
+        body: JSON.stringify(wire),
       });
     } catch {
       // Server-side failure — the optimistic update stays in place

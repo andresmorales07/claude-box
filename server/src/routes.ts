@@ -143,7 +143,22 @@ export async function handleRequest(
     }
     const parsed = result.data;
 
+    // Read persisted defaults; fill in any missing model/effort from the request body.
+    // model: undefined means "Auto" — the SDK uses its own default (respects ~/.claude/settings.json).
+    // effort: always has a value (defaults to "high" per Settings) — unlike model, there is no
+    // "let the SDK decide" option for effort; the stored default is always applied.
+    const savedSettings = await readSettings();
+    const sessionRequest = {
+      ...parsed,
+      model: parsed.model ?? savedSettings.claudeModel ?? undefined,
+      effort: parsed.effort ?? savedSettings.claudeEffort,
+    };
+
     // Imperative checks that depend on runtime config (not expressible in a static schema)
+    if (sessionRequest.effort === "max" && sessionRequest.model !== "claude-opus-4-6") {
+      json(res, 400, { error: "effort 'max' is only available with the Opus model" });
+      return;
+    }
     if (parsed.permissionMode === "bypassPermissions" && !ALLOW_BYPASS_PERMISSIONS) {
       json(res, 403, { error: "bypassPermissions is disabled; set ALLOW_BYPASS_PERMISSIONS=1 to enable" });
       return;
@@ -154,7 +169,7 @@ export async function handleRequest(
     }
 
     try {
-      const sessionResult = await createSession(parsed);
+      const sessionResult = await createSession(sessionRequest);
       json(res, 201, { id: sessionResult.id, status: sessionResult.status });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
