@@ -180,6 +180,7 @@ export async function createSession(
     permissionMode: req.permissionMode ?? "default",
     currentPermissionMode: req.permissionMode ?? "default",
     model: req.model,
+    effort: req.effort,
     abortController: new AbortController(),
     pendingApproval: null,
     alwaysAllowedTools: new Set<string>(),

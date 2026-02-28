@@ -50,6 +50,7 @@ export interface ProviderSessionOptions {
   cwd: string;
   permissionMode: PermissionModeCommon;
   model?: string;
+  effort?: "low" | "medium" | "high" | "max";
   allowedTools?: string[];
   maxTurns?: number;
   abortSignal: AbortSignal;
