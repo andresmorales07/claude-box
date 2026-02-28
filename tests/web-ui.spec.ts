@@ -230,7 +230,7 @@ test('mobile nav bar navigates to Settings page', async ({ page }) => {
   await nav.getByRole('button', { name: /Settings/i }).click();
 
   // Settings page renders a settings form
-  await expect(page.getByText('Settings')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: 5000 });
 
   // Nav bar still visible on Settings page
   await expect(nav).toBeVisible();
