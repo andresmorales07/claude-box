@@ -381,6 +381,11 @@ describe("SettingsSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts null claudeModel (clear to Auto)", () => {
+    const result = PatchSettingsSchema.safeParse({ claudeModel: null });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects invalid claudeModel", () => {
     const result = PatchSettingsSchema.safeParse({ claudeModel: "gpt-4" });
     expect(result.success).toBe(false);

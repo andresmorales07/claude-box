@@ -150,11 +150,15 @@ export async function handleRequest(
     const savedSettings = await readSettings();
     const sessionRequest = {
       ...parsed,
-      model: parsed.model ?? savedSettings.claudeModel,
+      model: parsed.model ?? savedSettings.claudeModel ?? undefined,
       effort: parsed.effort ?? savedSettings.claudeEffort,
     };
 
     // Imperative checks that depend on runtime config (not expressible in a static schema)
+    if (sessionRequest.effort === "max" && sessionRequest.model !== "claude-opus-4-6") {
+      json(res, 400, { error: "effort 'max' is only available with the Opus model" });
+      return;
+    }
     if (parsed.permissionMode === "bypassPermissions" && !ALLOW_BYPASS_PERMISSIONS) {
       json(res, 403, { error: "bypassPermissions is disabled; set ALLOW_BYPASS_PERMISSIONS=1 to enable" });
       return;

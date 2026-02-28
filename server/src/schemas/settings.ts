@@ -15,7 +15,7 @@ export const SettingsSchema = z
     terminalFontSize: z.number().int().min(10).max(20).openapi({ description: "Terminal font size in pixels (10–20)" }),
     terminalScrollback: z.number().int().min(100).max(10000).openapi({ description: "Terminal scrollback buffer size in lines (100–10000)" }),
     terminalShell: z.string().min(1).openapi({ description: "Default shell command for new terminal sessions" }),
-    claudeModel: z.enum(CLAUDE_MODELS).optional().openapi({ description: "Default Claude model for new sessions (undefined = SDK default)" }),
+    claudeModel: z.enum(CLAUDE_MODELS).nullable().optional().openapi({ description: "Default Claude model for new sessions (null/undefined = SDK default)" }),
     claudeEffort: z.enum(EFFORT_VALUES).default("high").openapi({ description: "Default effort level for new sessions" }),
   })
   .openapi("Settings");

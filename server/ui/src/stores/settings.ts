@@ -74,6 +74,13 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set(partial);
     if (partial.theme !== undefined) applyTheme(partial.theme);
 
+    // Convert undefined values to null for the wire format — JSON.stringify drops undefined
+    // but preserves null. The server treats null as "clear this field" (e.g. claudeModel: null → Auto).
+    const wire: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(partial)) {
+      wire[key] = value === undefined ? null : value;
+    }
+
     const token = useAuthStore.getState().token;
     try {
       await fetch("/api/settings", {
@@ -82,7 +89,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(partial),
+        body: JSON.stringify(wire),
       });
     } catch {
       // Server-side failure — the optimistic update stays in place
