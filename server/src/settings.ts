@@ -16,6 +16,8 @@ const DEFAULTS: Settings = {
   terminalFontSize: 14,
   terminalScrollback: 1000,
   terminalShell: "/bin/bash",
+  claudeEffort: "high",
+  // claudeModel intentionally absent (undefined = Auto / SDK default)
 };
 
 export async function readSettings(): Promise<Settings> {

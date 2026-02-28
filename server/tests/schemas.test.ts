@@ -7,6 +7,7 @@ import {
   SubagentCompletedEventSchema,
   isPathContained,
 } from "../src/schemas/index.js";
+import { SettingsSchema, PatchSettingsSchema } from "../src/schemas/settings.js";
 
 describe("CreateSessionRequestSchema", () => {
   it("accepts a valid request with all fields", () => {
@@ -95,6 +96,18 @@ describe("CreateSessionRequestSchema", () => {
     if (result.success) {
       expect(result.data).not.toHaveProperty("unknownField");
     }
+  });
+
+  it("accepts valid effort values", () => {
+    for (const effort of ["low", "medium", "high", "max"]) {
+      const result = CreateSessionRequestSchema.safeParse({ effort, provider: "test" });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("rejects invalid effort value", () => {
+    const result = CreateSessionRequestSchema.safeParse({ effort: "extreme" });
+    expect(result.success).toBe(false);
   });
 });
 
@@ -327,5 +340,49 @@ describe("isPathContained", () => {
 
   it("returns false for a relative traversal beyond root", () => {
     expect(isPathContained("/workspace", "../etc/passwd")).toBe(false);
+  });
+});
+
+describe("SettingsSchema", () => {
+  it("accepts all valid claudeModel values", () => {
+    for (const model of ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"]) {
+      const result = SettingsSchema.safeParse({
+        theme: "dark",
+        terminalFontSize: 14,
+        terminalScrollback: 1000,
+        terminalShell: "/bin/bash",
+        claudeEffort: "high",
+        claudeModel: model,
+      });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("accepts undefined claudeModel (auto)", () => {
+    const result = SettingsSchema.safeParse({
+      theme: "dark",
+      terminalFontSize: 14,
+      terminalScrollback: 1000,
+      terminalShell: "/bin/bash",
+      claudeEffort: "high",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts all valid claudeEffort values", () => {
+    for (const effort of ["low", "medium", "high", "max"]) {
+      const result = PatchSettingsSchema.safeParse({ claudeEffort: effort });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("rejects invalid claudeEffort", () => {
+    const result = PatchSettingsSchema.safeParse({ claudeEffort: "extreme" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid claudeModel", () => {
+    const result = PatchSettingsSchema.safeParse({ claudeModel: "gpt-4" });
+    expect(result.success).toBe(false);
   });
 });

@@ -30,6 +30,7 @@ export const CreateSessionRequestSchema = z
       .openapi({ description: "Permission mode for the session" }),
     provider: z.string().optional().openapi({ description: "Provider ID (defaults to 'claude')" }),
     model: z.string().optional().openapi({ description: "Model override" }),
+    effort: z.enum(["low", "medium", "high", "max"]).optional().openapi({ description: "Effort level override" }),
     cwd: z
       .string({ message: "invalid cwd" })
       .refine((v) => !v.includes("\0"), { message: "invalid cwd" })
