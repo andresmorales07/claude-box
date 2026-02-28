@@ -1,21 +1,31 @@
 import { create } from "zustand";
 import { useAuthStore } from "./auth";
 
+type ClaudeModel = "claude-haiku-4-5-20251001" | "claude-sonnet-4-6" | "claude-opus-4-6";
+type ClaudeEffort = "low" | "medium" | "high" | "max";
+
 export interface SettingsState {
   theme: "dark" | "light";
   terminalFontSize: number;
   terminalScrollback: number;
   terminalShell: string;
+  claudeModel: ClaudeModel | undefined;
+  claudeEffort: ClaudeEffort;
 
   fetchSettings: () => Promise<void>;
   updateSettings: (partial: Partial<Omit<SettingsState, "fetchSettings" | "updateSettings">>) => Promise<void>;
 }
+
+const CLAUDE_MODELS: ClaudeModel[] = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"];
+const CLAUDE_EFFORTS: ClaudeEffort[] = ["low", "medium", "high", "max"];
 
 const DEFAULTS = {
   theme: "dark" as const,
   terminalFontSize: 14,
   terminalScrollback: 1000,
   terminalShell: "/bin/bash",
+  claudeModel: undefined as ClaudeModel | undefined,
+  claudeEffort: "high" as ClaudeEffort,
 };
 
 function applyTheme(theme: "dark" | "light"): void {
@@ -43,6 +53,12 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         terminalFontSize: data.terminalFontSize ?? DEFAULTS.terminalFontSize,
         terminalScrollback: data.terminalScrollback ?? DEFAULTS.terminalScrollback,
         terminalShell: data.terminalShell ?? DEFAULTS.terminalShell,
+        claudeModel: CLAUDE_MODELS.includes(data.claudeModel as ClaudeModel)
+          ? (data.claudeModel as ClaudeModel)
+          : undefined,
+        claudeEffort: CLAUDE_EFFORTS.includes(data.claudeEffort as ClaudeEffort)
+          ? (data.claudeEffort as ClaudeEffort)
+          : "high",
       });
       applyTheme(theme);
     } catch {
