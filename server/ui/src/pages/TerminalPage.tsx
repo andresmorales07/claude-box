@@ -9,6 +9,8 @@ import { Plus } from "lucide-react";
 
 type ConnectionStatus = "connecting" | "attached" | "disconnected" | "error";
 
+const TERMINAL_SESSION_KEY = "hatchpod_terminal_session_id";
+
 const STATUS_COLOR: Record<ConnectionStatus, string> = {
   connecting: "bg-yellow-400 animate-pulse",
   attached: "bg-green-400",
@@ -108,6 +110,7 @@ export function TerminalPage() {
           const fresh = msg.fresh as boolean;
           sessionIdRef.current = id;
           setSessionId(id);
+          localStorage.setItem(TERMINAL_SESSION_KEY, id);
           setStatus("attached");
           // Send initial dimensions
           if (fitRef.current && ws.readyState === 1) {
@@ -125,6 +128,7 @@ export function TerminalPage() {
           termRef.current?.write(msg.data as string);
           break;
         case "exit":
+          localStorage.removeItem(TERMINAL_SESSION_KEY);
           setStatus("disconnected");
           termRef.current?.writeln(`\r\n\x1b[33m[shell exited with code ${msg.exitCode as number}]\x1b[0m`);
           break;
@@ -191,7 +195,7 @@ export function TerminalPage() {
     });
     observer.observe(containerRef.current);
 
-    connectWs(null);
+    connectWs(localStorage.getItem(TERMINAL_SESSION_KEY));
 
     return () => {
       mountedRef.current = false;
@@ -224,6 +228,7 @@ export function TerminalPage() {
   }, [terminalScrollback]);
 
   const handleNewSession = () => {
+    localStorage.removeItem(TERMINAL_SESSION_KEY);
     sessionIdRef.current = null;
     setSessionId(null);
     connectWs(null);
