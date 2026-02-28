@@ -16,6 +16,9 @@ export interface SettingsState {
   updateSettings: (partial: Partial<Omit<SettingsState, "fetchSettings" | "updateSettings">>) => Promise<void>;
 }
 
+// NOTE: These lists must match server/src/schemas/settings.ts CLAUDE_MODELS and EFFORT_VALUES.
+// The UI bundle cannot import from the server schema directly (different package), so this
+// is a documented exception to the Zod-as-single-source-of-truth convention.
 const CLAUDE_MODELS: ClaudeModel[] = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"];
 const CLAUDE_EFFORTS: ClaudeEffort[] = ["low", "medium", "high", "max"];
 

@@ -143,7 +143,10 @@ export async function handleRequest(
     }
     const parsed = result.data;
 
-    // Read persisted defaults; fill in any missing model/effort from request body
+    // Read persisted defaults; fill in any missing model/effort from the request body.
+    // model: undefined means "Auto" — the SDK uses its own default (respects ~/.claude/settings.json).
+    // effort: always has a value (defaults to "high" per Settings) — unlike model, there is no
+    // "let the SDK decide" option for effort; the stored default is always applied.
     const savedSettings = await readSettings();
     const sessionRequest = {
       ...parsed,
