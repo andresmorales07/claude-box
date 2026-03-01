@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import TextareaAutosize from "react-textarea-autosize";
-import { SlashCommandDropdown, getFilteredCommands } from "./SlashCommandDropdown";
+import { SlashCommandDropdown } from "./SlashCommandDropdown";
+import { getFilteredCommands } from "@/lib/slash-commands";
 import { Button } from "@/components/ui/button";
 import { Send, Square } from "lucide-react";
 import type { SlashCommand } from "@shared/types";
