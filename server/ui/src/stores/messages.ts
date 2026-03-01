@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { useAuthStore } from "./auth";
 import { useSessionsStore } from "./sessions";
-import type { NormalizedMessage, SlashCommand, ExtractedTask, ToolSummary, PermissionModeCommon } from "@shared/types";
+import type { NormalizedMessage, SlashCommand, ExtractedTask, ToolSummary, PermissionModeCommon, RateLimitInfo } from "@shared/types";
+export type { RateLimitInfo };
 
 type ServerMessage =
   | { type: "message"; message: NormalizedMessage }
@@ -65,18 +66,6 @@ interface PendingApproval {
   toolUseId: string;
   input: unknown;
   targetMode?: string;
-}
-
-export interface RateLimitInfo {
-  status: "allowed" | "allowed_warning" | "rejected";
-  resetsAt?: number;
-  rateLimitType?: "five_hour" | "seven_day" | "seven_day_opus" | "seven_day_sonnet" | "overage";
-  utilization?: number;
-  overageStatus?: "allowed" | "allowed_warning" | "rejected";
-  overageResetsAt?: number;
-  overageDisabledReason?: string;
-  isUsingOverage?: boolean;
-  surpassedThreshold?: number;
 }
 
 interface MessagesState {
@@ -164,7 +153,7 @@ const RATE_LIMIT_LABELS: Record<string, string> = {
   overage: "extra usage",
 };
 
-function formatResetTime(resetsAt: number): string {
+export function formatResetTime(resetsAt: number): string {
   const now = Math.floor(Date.now() / 1000);
   const diff = resetsAt - now;
   if (diff <= 0) return "now";

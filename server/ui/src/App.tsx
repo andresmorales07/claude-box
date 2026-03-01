@@ -67,6 +67,7 @@ export function App() {
   const authenticated = useAuthStore((s) => s.authenticated);
   const fetchConfig = useSessionsStore((s) => s.fetchConfig);
   const fetchSettings = useSettingsStore((s) => s.fetchSettings);
+  const theme = useSettingsStore((s) => s.theme);
   const isDesktop = useIsDesktop();
 
   useEffect(() => {
@@ -91,7 +92,7 @@ export function App() {
       </Routes>
       <Toaster
         position="top-right"
-        theme="dark"
+        theme={theme}
         toastOptions={{
           className: "bg-card text-card-foreground border-border",
         }}

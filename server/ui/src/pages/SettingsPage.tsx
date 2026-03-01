@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useAuthStore } from "@/stores/auth";
+import { formatResetTime } from "@/stores/messages";
 import type { RateLimitInfo } from "@/stores/messages";
 import { Moon, Sun, Terminal, Info, Bot, Gauge } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,16 +31,6 @@ function formatRelativeTime(isoDate: string): string {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
-}
-
-function formatResetTime(resetsAt: number): string {
-  const now = Math.floor(Date.now() / 1000);
-  const diff = resetsAt - now;
-  if (diff <= 0) return "resetting now";
-  const hours = Math.floor(diff / 3600);
-  const mins = Math.floor((diff % 3600) / 60);
-  if (hours > 0) return `resets in ${hours}h ${mins}m`;
-  return `resets in ${mins}m`;
 }
 
 function barColor(utilization: number): string {
@@ -264,7 +255,7 @@ export function SettingsPage() {
                     </div>
                     {rateLimits.info.resetsAt && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        {formatResetTime(rateLimits.info.resetsAt)}
+                        {rateLimits.info.resetsAt <= Math.floor(Date.now() / 1000) ? "resetting now" : `resets in ${formatResetTime(rateLimits.info.resetsAt)}`}
                       </p>
                     )}
                   </div>
