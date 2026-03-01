@@ -23,6 +23,12 @@ const RATE_LIMIT_LABELS: Record<string, string> = {
   overage: "Extra usage",
 };
 
+const STATUS_LABELS: Record<string, { text: string; className: string }> = {
+  allowed: { text: "Within limits", className: "text-emerald-400" },
+  allowed_warning: { text: "Approaching limit", className: "text-amber-400" },
+  rejected: { text: "Rate limited", className: "text-red-400" },
+};
+
 function formatRelativeTime(isoDate: string): string {
   const diff = Date.now() - new Date(isoDate).getTime();
   const mins = Math.floor(diff / 60_000);
@@ -237,7 +243,7 @@ export function SettingsPage() {
               </p>
             ) : (
               <div className="flex flex-col gap-3">
-                {rateLimits.info.rateLimitType && rateLimits.info.utilization !== undefined && (
+                {rateLimits.info.rateLimitType && rateLimits.info.utilization !== undefined ? (
                   <div>
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span className="font-medium">
@@ -259,6 +265,10 @@ export function SettingsPage() {
                       </p>
                     )}
                   </div>
+                ) : (
+                  <p className={cn("text-sm font-medium", STATUS_LABELS[rateLimits.info.status]?.className ?? "text-muted-foreground")}>
+                    {STATUS_LABELS[rateLimits.info.status]?.text ?? rateLimits.info.status}
+                  </p>
                 )}
                 {rateLimits.info.isUsingOverage && (
                   <p className="text-xs text-amber-400">Using extra usage</p>
