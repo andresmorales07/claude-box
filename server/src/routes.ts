@@ -15,6 +15,7 @@ import { CreateSessionRequestSchema, UuidSchema, isPathContained, openApiDocumen
 import { computeGitDiffStat } from "./git-status.js";
 import { SERVER_VERSION } from "./version.js";
 import { readSettings, writeSettings } from "./settings.js";
+import { getCachedRateLimits } from "./rate-limits.js";
 
 const startTime = Date.now();
 
@@ -379,6 +380,18 @@ export async function handleRequest(
         console.error("browse error:", err);
         json(res, 500, { error: "internal server error" });
       }
+    }
+    return;
+  }
+
+  // GET /api/rate-limits — cached subscription rate limit info
+  if (pathname === "/api/rate-limits" && method === "GET") {
+    const cached = getCachedRateLimits();
+    if (!cached) {
+      res.writeHead(204);
+      res.end();
+    } else {
+      json(res, 200, cached);
     }
     return;
   }

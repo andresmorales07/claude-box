@@ -255,3 +255,37 @@ export type SubagentCompletedEvent = z.infer<typeof SubagentCompletedEventSchema
 export type CompactBoundaryEvent = z.infer<typeof CompactBoundaryEventSchema>;
 export type ModeChangedEvent = z.infer<typeof ModeChangedEventSchema>;
 export type ModelChangedEvent = z.infer<typeof ModelChangedEventSchema>;
+
+// ── Rate limit info (account-level, from SDK rate_limit_event) ──
+
+export const RateLimitStatusSchema = z
+  .enum(["allowed", "allowed_warning", "rejected"])
+  .openapi("RateLimitStatus");
+
+export const RateLimitTypeSchema = z
+  .enum(["five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet", "overage"])
+  .openapi("RateLimitType");
+
+export const RateLimitInfoSchema = z
+  .object({
+    status: RateLimitStatusSchema,
+    resetsAt: z.number().optional().openapi({ description: "Unix timestamp (seconds) when the limit resets" }),
+    rateLimitType: RateLimitTypeSchema.optional(),
+    utilization: z.number().min(0).max(1).optional().openapi({ description: "Usage fraction 0.0–1.0" }),
+    overageStatus: RateLimitStatusSchema.optional(),
+    overageResetsAt: z.number().optional(),
+    overageDisabledReason: z.string().optional(),
+    isUsingOverage: z.boolean().optional(),
+    surpassedThreshold: z.number().optional(),
+  })
+  .openapi("RateLimitInfo");
+
+export const CachedRateLimitResponseSchema = z
+  .object({
+    info: RateLimitInfoSchema,
+    lastUpdated: z.string().openapi({ description: "ISO 8601 timestamp when the cache was last updated" }),
+  })
+  .openapi("CachedRateLimitResponse");
+
+export type RateLimitInfo = z.infer<typeof RateLimitInfoSchema>;
+export type CachedRateLimitResponse = z.infer<typeof CachedRateLimitResponseSchema>;

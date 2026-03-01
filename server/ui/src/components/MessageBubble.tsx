@@ -8,6 +8,7 @@ import { SubagentCard } from "./SubagentCard";
 import { ToolSummaryCard } from "./ToolSummaryCard";
 import { useMessagesStore } from "@/stores/messages";
 import { cn } from "@/lib/utils";
+import { isGenericToolUse } from "@/lib/tool-utils";
 import { ChevronDown, Wrench, AlertCircle } from "lucide-react";
 
 function ElapsedTime({ startedAt }: { startedAt: number }) {
@@ -22,15 +23,6 @@ function ElapsedTime({ startedAt }: { startedAt: number }) {
 interface Props {
   message: NormalizedMessage;
   toolResults: Map<string, ToolResultPart>;
-}
-
-// Tools rendered by special-purpose components — excluded from generic grouping.
-// Exported so ChatPage can use it when pre-grouping cross-message tool batches.
-export function isGenericToolUse(part: ToolUsePart): boolean {
-  if (["TaskCreate", "TaskUpdate", "TaskList", "TaskGet"].includes(part.toolName)) return false;
-  if (part.toolName === "Task") return false;
-  if (part.toolName === "Write" || part.toolName === "Edit") return false;
-  return true;
 }
 
 // Shared expandable detail panel (used by both ToolCard and ToolRow)

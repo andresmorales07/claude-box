@@ -13,6 +13,7 @@ import { NewSessionPage } from "@/pages/NewSessionPage";
 import { TerminalPage } from "@/pages/TerminalPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { MobileNavBar } from "@/components/MobileNavBar";
+import { Toaster } from "sonner";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const authenticated = useAuthStore((s) => s.authenticated);
@@ -66,6 +67,7 @@ export function App() {
   const authenticated = useAuthStore((s) => s.authenticated);
   const fetchConfig = useSessionsStore((s) => s.fetchConfig);
   const fetchSettings = useSettingsStore((s) => s.fetchSettings);
+  const theme = useSettingsStore((s) => s.theme);
   const isDesktop = useIsDesktop();
 
   useEffect(() => {
@@ -88,6 +90,13 @@ export function App() {
           }
         />
       </Routes>
+      <Toaster
+        position="top-right"
+        theme={theme}
+        toastOptions={{
+          className: "bg-card text-card-foreground border-border",
+        }}
+      />
     </TooltipProvider>
   );
 }

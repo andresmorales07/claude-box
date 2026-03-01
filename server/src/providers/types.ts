@@ -22,6 +22,7 @@ export type {
   SubagentStartedEvent,
   SubagentToolCallEvent,
   SubagentCompletedEvent,
+  RateLimitInfo,
 } from "../schemas/index.js";
 
 // ── Provider interface types (contain callbacks, AbortSignal, AsyncGenerator) ──
@@ -34,6 +35,7 @@ import type {
   SubagentStartedEvent,
   SubagentToolCallEvent,
   SubagentCompletedEvent,
+  RateLimitInfo,
 } from "../schemas/index.js";
 
 export interface ToolApprovalRequest {
@@ -72,6 +74,7 @@ export interface ProviderSessionOptions {
   onSubagentCompleted?: (info: SubagentCompletedEvent) => void;
   onCompacting?: (isCompacting: boolean) => void;
   onContextUsage?: (usage: { inputTokens: number; contextWindow: number }) => void;
+  onRateLimit?: (info: RateLimitInfo) => void;
   onModeChanged?: (newMode: PermissionModeCommon) => void;
   onSessionIdResolved?: (sessionId: string) => void;
   onModelResolved?: (model: string) => void;
