@@ -12,6 +12,7 @@ export type {
   UserMessage,
   AssistantMessage,
   SystemEvent,
+  ToolSummaryMessage,
   NormalizedMessage,
   TaskStatus,
   ExtractedTask,
@@ -45,6 +46,13 @@ export type ApprovalDecision =
   | { allow: true; updatedInput?: Record<string, unknown>; alwaysAllow?: boolean }
   | { allow: false; message?: string };
 
+/** Opaque handle for controlling a live provider session. Defined here (not in the SDK) to keep SDK types isolated to claude-adapter.ts. */
+export interface ProviderQueryHandle {
+  streamInput(messages: AsyncIterable<unknown>): Promise<void>;
+  close(): void;
+  interrupt?(): void;
+}
+
 export interface ProviderSessionOptions {
   prompt: string;
   cwd: string;
@@ -57,6 +65,7 @@ export interface ProviderSessionOptions {
   resumeSessionId?: string;
   onToolApproval: (request: ToolApprovalRequest) => Promise<ApprovalDecision>;
   onThinkingDelta?: (text: string) => void;
+  onToolProgress?: (info: { toolUseId: string; toolName: string; elapsedSeconds: number }) => void;
   onSubagentStarted?: (info: SubagentStartedEvent) => void;
   onSubagentToolCall?: (info: SubagentToolCallEvent) => void;
   onSubagentCompleted?: (info: SubagentCompletedEvent) => void;
@@ -64,6 +73,8 @@ export interface ProviderSessionOptions {
   onContextUsage?: (usage: { inputTokens: number; contextWindow: number }) => void;
   onModeChanged?: (newMode: PermissionModeCommon) => void;
   onSessionIdResolved?: (sessionId: string) => void;
+  /** Called immediately after the SDK query handle is created. Used to store a live reference for streaming input. */
+  onQueryCreated?: (handle: ProviderQueryHandle) => void;
 }
 
 export interface ProviderSessionResult {

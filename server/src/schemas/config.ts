@@ -6,6 +6,10 @@ export const ConfigResponseSchema = z
     browseRoot: z.string().openapi({ description: "Absolute path to the file browser root" }),
     defaultCwd: z.string().openapi({ description: "Default working directory for new sessions" }),
     version: z.string().openapi({ description: "Server version (SemVer)" }),
+    supportedModels: z
+      .array(z.object({ id: z.string(), name: z.string().optional() }))
+      .nullable()
+      .openapi({ description: "Available models probed at startup, or null if not yet loaded" }),
   })
   .openapi("ConfigResponse");
 

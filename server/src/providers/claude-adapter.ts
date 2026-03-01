@@ -273,6 +273,13 @@ export class ClaudeAdapter implements ProviderAdapter {
         },
       });
 
+      // Notify caller of the live query handle (used for streaming input in Feature 4)
+      try {
+        options.onQueryCreated?.(queryHandle);
+      } catch (err) {
+        console.error("claude-adapter: onQueryCreated callback failed:", err);
+      }
+
       // Eagerly fetch enriched slash commands (with descriptions)
       const enrichedCommandsPromise = queryHandle.supportedCommands().then(
         (sdkCommands: SDKSlashCommand[]) =>
@@ -410,6 +417,31 @@ export class ClaudeAdapter implements ProviderAdapter {
               }
             }
           }
+          continue;
+        }
+
+        // Handle tool progress events (ephemeral — forwarded to UI via callback, not stored)
+        if (sdkMessage.type === "tool_progress") {
+          const tp = sdkMessage as { tool_use_id: string; tool_name: string; elapsed_time_seconds: number; parent_tool_use_id?: string | null };
+          if (tp.parent_tool_use_id == null) {
+            try {
+              options.onToolProgress?.({ toolUseId: tp.tool_use_id, toolName: tp.tool_name, elapsedSeconds: tp.elapsed_time_seconds });
+            } catch (err) {
+              console.error("claude-adapter: onToolProgress callback failed:", err);
+            }
+          }
+          continue;
+        }
+
+        // Handle tool use summary messages (yielded as ToolSummaryMessage for replay)
+        if (sdkMessage.type === "tool_use_summary") {
+          const ts = sdkMessage as { summary: string; preceding_tool_use_ids: string[] };
+          yield {
+            role: "tool_summary" as const,
+            summary: ts.summary,
+            precedingToolUseIds: ts.preceding_tool_use_ids,
+            index: messageIndex++,
+          };
           continue;
         }
 
@@ -674,6 +706,15 @@ export class ClaudeAdapter implements ProviderAdapter {
       return { role: "system", event: { type: "compact_boundary", trigger, preTokens }, index };
     }
 
+    // Handle tool_use_summary lines from JSONL (yielded during live sessions; must survive history replay)
+    if (type === "tool_use_summary") {
+      const summary = typeof parsed.summary === "string" ? parsed.summary : "";
+      const precedingToolUseIds = Array.isArray(parsed.preceding_tool_use_ids)
+        ? (parsed.preceding_tool_use_ids as unknown[]).filter((id): id is string => typeof id === "string")
+        : [];
+      return { role: "tool_summary", summary, precedingToolUseIds, index };
+    }
+
     if (type !== "user" && type !== "assistant") return null;
 
     // Skip system-injected user messages (skill content, system context, etc.)
@@ -694,4 +735,34 @@ export class ClaudeAdapter implements ProviderAdapter {
       index,
     );
   }
+}
+
+// ── Dynamic model list (Feature 2) ──
+
+let cachedModels: Array<{ id: string; name?: string }> | null = null;
+
+/** Probe the SDK at startup to get the list of available models. Fire-and-forget. */
+export async function preloadSupportedModels(): Promise<void> {
+  try {
+    const queryHandle: Query = sdkQuery({
+      prompt: ".",
+      options: {
+        maxTurns: 0,
+        settingSources: [],
+        systemPrompt: { type: "preset", preset: "claude_code" },
+      },
+    });
+    const raw = await queryHandle.supportedModels();
+    cachedModels = (raw as Array<Record<string, unknown>>).map((m) => ({
+      id: String(m.id ?? m),
+      name: typeof m.name === "string" ? m.name : undefined,
+    }));
+    queryHandle.close();
+  } catch (err) {
+    console.warn("preloadSupportedModels: failed —", err);
+  }
+}
+
+export function getCachedModels(): Array<{ id: string; name?: string }> | null {
+  return cachedModels;
 }

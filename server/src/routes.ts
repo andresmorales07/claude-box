@@ -10,6 +10,7 @@ import {
   deleteSession,
 } from "./sessions.js";
 import { listProviders, getProvider } from "./providers/index.js";
+import { getCachedModels } from "./providers/claude-adapter.js";
 import { CreateSessionRequestSchema, UuidSchema, isPathContained, openApiDocument, PatchSettingsSchema } from "./schemas/index.js";
 import { computeGitDiffStat } from "./git-status.js";
 import { SERVER_VERSION } from "./version.js";
@@ -315,7 +316,7 @@ export async function handleRequest(
   // GET /api/config — server configuration for the UI
   if (pathname === "/api/config" && method === "GET") {
     const defaultCwd = process.env.DEFAULT_CWD ?? process.cwd();
-    json(res, 200, { browseRoot: BROWSE_ROOT, defaultCwd, version: SERVER_VERSION });
+    json(res, 200, { browseRoot: BROWSE_ROOT, defaultCwd, version: SERVER_VERSION, supportedModels: getCachedModels() });
     return;
   }
 

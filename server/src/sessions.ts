@@ -317,6 +317,17 @@ async function runSession(
           percentUsed,
         });
       },
+      onToolProgress: (info) => {
+        watcher!.pushEvent(session.sessionId, {
+          type: "tool_progress",
+          toolUseId: info.toolUseId,
+          toolName: info.toolName,
+          elapsedSeconds: info.elapsedSeconds,
+        });
+      },
+      onQueryCreated: (q) => {
+        session.queryHandle = q;
+      },
       onSessionIdResolved: (realId: string) => {
         // Remap the session to the real CLI session ID as soon as it's known
         // (from the SDK's init message, before any visible messages arrive).
@@ -352,9 +363,21 @@ async function runSession(
     // which for-await discards.
     let result: IteratorResult<NormalizedMessage, ProviderSessionResult>;
     while (!(result = await generator.next()).done) {
-      // Intercept system_init messages — broadcast slash commands separately.
+      // Intercept system_init messages — broadcast slash commands separately, not stored.
       if (result.value.role === "system" && "event" in result.value && result.value.event.type === "system_init") {
         watcher.pushEvent(session.sessionId, { type: "slash_commands", commands: result.value.event.slashCommands });
+        continue;
+      }
+      // Intercept session_result mid-stream — marks idle between turns when streaming input is active.
+      // The generator stays alive waiting for the next streamInput() call; not stored (like system_init).
+      if (
+        session.queryHandle &&
+        result.value.role === "system" &&
+        "event" in result.value &&
+        result.value.event.type === "session_result"
+      ) {
+        session.status = "idle";
+        watcher.pushEvent(session.sessionId, { type: "status", status: "idle" });
         continue;
       }
       // Store + broadcast each SDK message via the watcher.
@@ -419,6 +442,9 @@ async function runSession(
       console.error(`Session ${session.sessionId} error:`, err);
     }
   }
+
+  // Clear the live query handle — the generator is done.
+  session.queryHandle = undefined;
 
   watcher.pushEvent(session.sessionId, {
     type: "status",
@@ -520,13 +546,41 @@ export function handleApproval(
   return true;
 }
 
+/** Yields a single user message in the format the SDK's streamInput() expects. */
+async function* streamUserMessage(sessionId: string, text: string) {
+  yield {
+    type: "user" as const,
+    message: { role: "user" as const, content: text },
+    parent_tool_use_id: null,
+    session_id: sessionId,
+  };
+}
+
 export async function sendFollowUp(
   session: ActiveSession,
   text: string,
 ): Promise<boolean> {
-  if (session.status === "running" || session.status === "starting") {
+  if (session.status === "running" || session.status === "starting" || session.status === "waiting_for_approval") {
     return false;
   }
+
+  // Streaming path: the SDK query is still alive — stream input directly into it.
+  // This avoids spawning a new CLI process; the same process handles the next turn.
+  if (session.queryHandle) {
+    session.status = "running";
+    watcher?.setMode(session.sessionId, "push", session.cwd);
+    watcher?.pushEvent(session.sessionId, { type: "status", status: "running" });
+    watcher?.pushMessage(session.sessionId, {
+      role: "user",
+      parts: [{ type: "text", text }],
+      index: 0, // overwritten by pushMessage()
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await session.queryHandle.streamInput(streamUserMessage(session.sessionId, text) as any);
+    return true;
+  }
+
+  // Fallback path: start a new session (resume-based, for reconnected/history sessions).
   session.abortController = new AbortController();
   const isFirstMessage = session.status === "idle";
   runSession(

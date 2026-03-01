@@ -1,4 +1,4 @@
-import type { NormalizedMessage, PermissionModeCommon, SlashCommand, ToolSummary, ApprovalDecision } from "./providers/types.js";
+import type { NormalizedMessage, PermissionModeCommon, SlashCommand, ToolSummary, ApprovalDecision, ProviderQueryHandle } from "./providers/types.js";
 
 // ── Serializable types — re-exported from Zod schemas ──
 
@@ -27,6 +27,8 @@ export interface ActiveSession {
   alwaysAllowedTools: Set<string>;
   status: SessionStatus;
   lastError: string | null;
+  /** Live query handle, present while the session process is running. Used for streaming follow-up input. */
+  queryHandle?: ProviderQueryHandle;
 }
 
 export interface PendingApproval {
@@ -59,6 +61,7 @@ export type ServerMessage =
   | { type: "subagent_completed"; taskId: string; toolUseId: string; status: "completed" | "failed" | "stopped"; summary: string }
   | { type: "compacting"; isCompacting: boolean }
   | { type: "context_usage"; inputTokens: number; contextWindow: number; percentUsed: number }
+  | { type: "tool_progress"; toolUseId: string; toolName: string; elapsedSeconds: number }
   | { type: "git_diff_stat"; files: Array<{ path: string; insertions: number; deletions: number; binary: boolean; untracked: boolean; staged: boolean }>; totalInsertions: number; totalDeletions: number; branch?: string }
   | { type: "ping" }
   | { type: "error"; message: string };
