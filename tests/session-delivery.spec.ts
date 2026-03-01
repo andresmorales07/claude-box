@@ -586,6 +586,25 @@ test.describe('session delivery pipeline', () => {
     }
   });
 
+  test('rate limit events are delivered via WebSocket', async () => {
+    const sessionId = await createTestSession('[rate-limit] hello');
+    const conn = await connectWs(sessionId);
+
+    try {
+      await conn.waitFor((msgs) => hasStatus(msgs, 'completed'));
+
+      // Should have received rate_limit event
+      const rateLimitMsg = conn.messages.find((m) => m.type === 'rate_limit');
+      expect(rateLimitMsg).toBeDefined();
+      expect(rateLimitMsg!.status).toBe('allowed_warning');
+      expect(rateLimitMsg!.rateLimitType).toBe('five_hour');
+      expect(rateLimitMsg!.utilization).toBe(0.82);
+      expect(rateLimitMsg!.resetsAt).toBeGreaterThan(0);
+    } finally {
+      conn.close();
+    }
+  });
+
   test('compacting scenario: delivers compacting events, compact_boundary, and context_usage', async () => {
     const sessionId = await createTestSession('[compacting] test');
     const conn = await connectWs(sessionId);
