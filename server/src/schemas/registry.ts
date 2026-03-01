@@ -12,6 +12,7 @@ import {
   NormalizedMessageSchema,
   PaginatedMessagesSchema,
   SessionListItemSchema,
+  CachedRateLimitResponseSchema,
 } from "./providers.js";
 import {
   CreateSessionRequestSchema,
@@ -358,6 +359,31 @@ registry.registerPath({
     },
     404: {
       description: "Not a git repository",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/rate-limits",
+  summary: "Subscription rate limits",
+  description:
+    "Returns cached subscription rate limit information (session limit, weekly limit, " +
+    "per-model limits). Data is populated after the first API call in any session. " +
+    "Returns 204 if no rate limit data has been observed yet.",
+  tags: ["Config"],
+  security: [{ [bearerAuth.name]: [] }],
+  responses: {
+    200: {
+      description: "Cached rate limit info",
+      content: { "application/json": { schema: CachedRateLimitResponseSchema } },
+    },
+    204: {
+      description: "No rate limit data available yet",
+    },
+    401: {
+      description: "Unauthorized",
       content: { "application/json": { schema: ErrorResponseSchema } },
     },
   },
