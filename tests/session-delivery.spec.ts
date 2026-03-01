@@ -587,10 +587,25 @@ test.describe('session delivery pipeline', () => {
   });
 
   test('rate limit events are delivered via WebSocket', async () => {
-    const sessionId = await createTestSession('[rate-limit] hello');
+    // Use idle session so WS is connected before the ephemeral event fires
+    const res = await fetch(`${BASE_URL}/api/sessions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${API_PASSWORD}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ provider: 'test' }),
+    });
+    const { id: sessionId } = await res.json();
+
     const conn = await connectWs(sessionId);
 
     try {
+      await conn.waitFor((msgs) => msgs.some((m) => m.type === 'replay_complete'));
+
+      // Send rate-limit scenario via WS prompt
+      conn.ws.send(JSON.stringify({ type: 'prompt', text: '[rate-limit] hello' }));
+
       await conn.waitFor((msgs) => hasStatus(msgs, 'completed'));
 
       // Should have received rate_limit event
