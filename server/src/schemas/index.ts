@@ -25,6 +25,8 @@ export {
   SubagentToolCallEventSchema,
   SubagentCompletedEventSchema,
   ModelChangedEventSchema,
+  RateLimitInfoSchema,
+  CachedRateLimitResponseSchema,
 } from "./providers.js";
 
 export type {
@@ -51,6 +53,8 @@ export type {
   SubagentCompletedEvent,
   ModeChangedEvent,
   ModelChangedEvent,
+  RateLimitInfo,
+  CachedRateLimitResponse,
 } from "./providers.js";
 
 export {

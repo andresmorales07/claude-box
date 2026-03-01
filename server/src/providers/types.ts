@@ -22,6 +22,7 @@ export type {
   SubagentStartedEvent,
   SubagentToolCallEvent,
   SubagentCompletedEvent,
+  RateLimitInfo,
 } from "../schemas/index.js";
 
 // ── Provider interface types (contain callbacks, AbortSignal, AsyncGenerator) ──
@@ -34,6 +35,7 @@ import type {
   SubagentStartedEvent,
   SubagentToolCallEvent,
   SubagentCompletedEvent,
+  RateLimitInfo,
 } from "../schemas/index.js";
 
 export interface ToolApprovalRequest {
