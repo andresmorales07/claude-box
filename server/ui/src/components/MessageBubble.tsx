@@ -1,12 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type React from "react";
 import type { NormalizedMessage, MessagePart, TextPart, ToolResultPart, ToolUsePart } from "@shared/types";
 
 import { Markdown } from "./Markdown";
 import { FileDiffCard } from "./FileDiffCard";
 import { SubagentCard } from "./SubagentCard";
+import { ToolSummaryCard } from "./ToolSummaryCard";
+import { useMessagesStore } from "@/stores/messages";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Wrench, AlertCircle } from "lucide-react";
+
+function ElapsedTime({ startedAt }: { startedAt: number }) {
+  const [elapsed, setElapsed] = useState(() => Math.round((Date.now() - startedAt) / 1000));
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(Math.round((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+  return <span className="text-muted-foreground text-xs tabular-nums">{elapsed}s</span>;
+}
 
 interface Props {
   message: NormalizedMessage;
@@ -78,8 +89,10 @@ function ToolCard({
   toolResult?: ToolResultPart | null;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const toolProgress = useMessagesStore((s) => s.activeToolUses.get(toolUse.toolUseId));
   const summary = toolUse.summary ?? { description: "" };
   const isError = toolResult?.isError ?? false;
+  const isLive = toolProgress != null && toolResult == null;
 
   return (
     <div className="rounded-lg border border-border bg-card/50 overflow-hidden text-sm">
@@ -88,13 +101,14 @@ function ToolCard({
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >
-        <Wrench className="size-3.5 text-amber-400 shrink-0 mt-0.5" />
+        <Wrench className={cn("size-3.5 shrink-0 mt-0.5", isLive ? "text-cyan-400 animate-pulse" : "text-amber-400")} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-medium text-amber-400 shrink-0">{toolUse.toolName}</span>
             {summary.description && (
               <span className="text-muted-foreground truncate text-xs">{summary.description}</span>
             )}
+            {isLive && <ElapsedTime startedAt={toolProgress.startedAt} />}
             {isError && <AlertCircle className="size-3.5 text-destructive shrink-0" />}
           </div>
           {summary.command && (
@@ -373,6 +387,10 @@ export function MessageBubble({ message, toolResults }: Props) {
         {renderParts(message.parts, toolResults)}
       </div>
     );
+  }
+
+  if (message.role === "tool_summary") {
+    return <ToolSummaryCard message={message} />;
   }
 
   return null;

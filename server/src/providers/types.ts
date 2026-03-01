@@ -12,6 +12,7 @@ export type {
   UserMessage,
   AssistantMessage,
   SystemEvent,
+  ToolSummaryMessage,
   NormalizedMessage,
   TaskStatus,
   ExtractedTask,
@@ -57,6 +58,7 @@ export interface ProviderSessionOptions {
   resumeSessionId?: string;
   onToolApproval: (request: ToolApprovalRequest) => Promise<ApprovalDecision>;
   onThinkingDelta?: (text: string) => void;
+  onToolProgress?: (info: { toolUseId: string; toolName: string; elapsedSeconds: number }) => void;
   onSubagentStarted?: (info: SubagentStartedEvent) => void;
   onSubagentToolCall?: (info: SubagentToolCallEvent) => void;
   onSubagentCompleted?: (info: SubagentCompletedEvent) => void;
@@ -64,6 +66,8 @@ export interface ProviderSessionOptions {
   onContextUsage?: (usage: { inputTokens: number; contextWindow: number }) => void;
   onModeChanged?: (newMode: PermissionModeCommon) => void;
   onSessionIdResolved?: (sessionId: string) => void;
+  /** Called immediately after the SDK query handle is created. Used to store a live reference for streaming input. */
+  onQueryCreated?: (query: import("@anthropic-ai/claude-agent-sdk").Query) => void;
 }
 
 export interface ProviderSessionResult {

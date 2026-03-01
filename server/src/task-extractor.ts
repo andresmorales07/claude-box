@@ -17,7 +17,7 @@ export function extractTasks(messages: NormalizedMessage[]): ExtractedTask[] {
   let latestTodos: ExtractedTask[] = [];
 
   for (const msg of messages) {
-    if (msg.role === "system") continue;
+    if (msg.role === "system" || msg.role === "tool_summary") continue;
     for (const part of msg.parts) {
       if (part.type === "tool_use" && part.toolName === "TodoWrite") {
         const input = part.input as Record<string, unknown> | undefined;

@@ -23,6 +23,7 @@ interface SessionsState {
   cwd: string;
   browseRoot: string;
   version: string;
+  supportedModels: Array<{ id: string; name?: string }> | null;
   searchQuery: string;
   lastError: string | null;
   workspaceFilter: string | null;
@@ -35,7 +36,7 @@ interface SessionsState {
   setWorkspaceFilter: (filter: string | null) => void;
   fetchConfig: () => Promise<void>;
   fetchSessions: () => Promise<void>;
-  createSession: (opts: { prompt?: string; cwd: string; permissionMode?: PermissionModeCommon }) => Promise<string | null>;
+  createSession: (opts: { prompt?: string; cwd: string; permissionMode?: PermissionModeCommon; model?: string }) => Promise<string | null>;
   deleteSession: (id: string) => Promise<boolean>;
 }
 
@@ -45,6 +46,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   cwd: "",
   browseRoot: "",
   version: "",
+  supportedModels: null,
   searchQuery: "",
   lastError: null,
   workspaceFilter: null,
@@ -64,7 +66,11 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       if (!res.ok) return;
       const config = await res.json();
       if (config?.browseRoot) {
-        set({ browseRoot: config.browseRoot, version: config.version ?? "" });
+        set({
+          browseRoot: config.browseRoot,
+          version: config.version ?? "",
+          supportedModels: config.supportedModels ?? null,
+        });
         if (!get().cwd) set({ cwd: config.defaultCwd ?? config.browseRoot });
       }
     } catch (err) {
@@ -85,12 +91,13 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     }
   },
 
-  createSession: async ({ prompt, cwd, permissionMode }) => {
+  createSession: async ({ prompt, cwd, permissionMode, model }) => {
     const { token } = useAuthStore.getState();
     try {
       const body: Record<string, string> = { cwd };
       if (prompt) body.prompt = prompt;
       if (permissionMode) body.permissionMode = permissionMode;
+      if (model) body.model = model;
       const res = await fetch("/api/sessions", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

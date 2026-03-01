@@ -138,11 +138,21 @@ export const SystemEventSchema = z
   })
   .openapi("SystemEvent");
 
+export const ToolSummaryMessageSchema = z
+  .object({
+    role: z.literal("tool_summary"),
+    summary: z.string().openapi({ description: "Human-readable summary of the preceding tool use group" }),
+    precedingToolUseIds: z.array(z.string()).openapi({ description: "Tool use IDs that this summary replaces" }),
+    index: z.number().int(),
+  })
+  .openapi("ToolSummaryMessage");
+
 export const NormalizedMessageSchema = z
   .discriminatedUnion("role", [
     UserMessageSchema,
     AssistantMessageSchema,
     SystemEventSchema,
+    ToolSummaryMessageSchema,
   ])
   .openapi("NormalizedMessage");
 
@@ -227,6 +237,7 @@ export type SlashCommand = z.infer<typeof SlashCommandSchema>;
 export type UserMessage = z.infer<typeof UserMessageSchema>;
 export type AssistantMessage = z.infer<typeof AssistantMessageSchema>;
 export type SystemEvent = z.infer<typeof SystemEventSchema>;
+export type ToolSummaryMessage = z.infer<typeof ToolSummaryMessageSchema>;
 export type NormalizedMessage = z.infer<typeof NormalizedMessageSchema>;
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 export type ExtractedTask = z.infer<typeof ExtractedTaskSchema>;

@@ -10,11 +10,12 @@ import TextareaAutosize from "react-textarea-autosize";
 import { cn } from "@/lib/utils";
 
 export function NewSessionPage() {
-  const { cwd, browseRoot, setCwd, createSession, lastError } = useSessionsStore();
+  const { cwd, browseRoot, setCwd, createSession, lastError, supportedModels } = useSessionsStore();
   const [prompt, setPrompt] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permissionMode, setPermissionMode] = useState<PermissionModeCommon>("default");
+  const [model, setModel] = useState<string>("");
   const navigate = useNavigate();
 
   const handleCreate = async () => {
@@ -22,7 +23,12 @@ export function NewSessionPage() {
     setCreating(true);
     setError(null);
     try {
-      const sessionId = await createSession({ prompt: prompt.trim() || undefined, cwd, permissionMode });
+      const sessionId = await createSession({
+        prompt: prompt.trim() || undefined,
+        cwd,
+        permissionMode,
+        model: model || undefined,
+      });
       if (sessionId) {
         navigate(`/session/${sessionId}`, { replace: true });
       } else {
@@ -69,6 +75,23 @@ export function NewSessionPage() {
               ))}
             </div>
           </div>
+          {supportedModels && supportedModels.length > 0 && (
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Model</label>
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-card text-foreground text-sm outline-none focus:border-ring"
+              >
+                <option value="">Default</option>
+                {supportedModels.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name ?? m.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="text-sm font-medium text-foreground mb-2 block">Initial Prompt (optional)</label>
             <TextareaAutosize

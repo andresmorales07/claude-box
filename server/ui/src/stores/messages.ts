@@ -16,6 +16,7 @@ type ServerMessage =
   | { type: "subagent_started"; taskId: string; toolUseId: string; description: string; agentType?: string; startedAt: number }
   | { type: "subagent_tool_call"; toolUseId: string; toolName: string; summary: ToolSummary }
   | { type: "subagent_completed"; taskId: string; toolUseId: string; status: "completed" | "failed" | "stopped"; summary: string }
+  | { type: "tool_progress"; toolUseId: string; toolName: string; elapsedSeconds: number }
   | { type: "compacting"; isCompacting: boolean }
   | { type: "context_usage"; inputTokens: number; contextWindow: number; percentUsed: number }
   | { type: "git_diff_stat"; files: GitFileStat[]; totalInsertions: number; totalDeletions: number; branch?: string }
@@ -38,6 +39,12 @@ interface GitDiffStat {
   totalInsertions: number;
   totalDeletions: number;
   branch?: string;
+}
+
+export interface ToolProgressState {
+  toolName: string;
+  elapsedSeconds: number; // authoritative value from SDK (updated on each event)
+  startedAt: number; // client-side timestamp of first event, for live counter
 }
 
 export interface SubagentState {
@@ -79,6 +86,9 @@ interface MessagesState {
 
   // Active and recently completed subagent states — keyed by toolUseId
   activeSubagents: Map<string, SubagentState>;
+
+  // In-progress generic tool uses with SDK-reported elapsed times — keyed by toolUseId
+  activeToolUses: Map<string, ToolProgressState>;
 
   // Context window state
   isCompacting: boolean;
@@ -156,6 +166,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   totalMessageCount: 0,
   serverTasks: [],
   activeSubagents: new Map(),
+  activeToolUses: new Map(),
   isCompacting: false,
   contextUsage: null,
   gitDiffStat: null,
@@ -203,6 +214,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
         totalMessageCount: 0,
         serverTasks: [],
         activeSubagents: new Map(),
+        activeToolUses: new Map(),
         isCompacting: false,
         contextUsage: null,
         gitDiffStat: null,
@@ -299,6 +311,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
                 thinkingText: "",
                 thinkingStartTime: null,
                 activeSubagents: new Map(),
+                activeToolUses: new Map(),
                 isCompacting: false,
               });
             } else if (isRunningStatus) {
@@ -406,6 +419,18 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
                 console.warn(`subagent_completed for unknown toolUseId "${msg.toolUseId}" — possible ordering issue`);
               }
               return { activeSubagents: map };
+            });
+            break;
+          case "tool_progress":
+            set((s) => {
+              const map = new Map(s.activeToolUses);
+              const existing = map.get(msg.toolUseId);
+              map.set(msg.toolUseId, {
+                toolName: msg.toolName,
+                elapsedSeconds: msg.elapsedSeconds,
+                startedAt: existing?.startedAt ?? Date.now(),
+              });
+              return { activeToolUses: map };
             });
             break;
           case "compacting": {

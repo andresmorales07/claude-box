@@ -18,6 +18,7 @@ async function getTerminalWs() {
 }
 import { initWatcher } from "./sessions.js";
 import { getProvider } from "./providers/index.js";
+import { preloadSupportedModels } from "./providers/claude-adapter.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -97,6 +98,9 @@ export function createApp() {
   // Initialize the SessionWatcher with the default provider adapter.
   // This starts polling JSONL session files for new messages.
   initWatcher(getProvider("claude"));
+
+  // Probe the SDK for available models (fire-and-forget — cached in claude-adapter.ts).
+  void preloadSupportedModels();
 
   const server = createHttpServer(async (req, res) => {
     try {
