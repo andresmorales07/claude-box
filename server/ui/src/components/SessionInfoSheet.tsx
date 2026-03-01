@@ -26,6 +26,11 @@ const modeLabels: Record<string, string> = {
   default: "Default",
 };
 
+/**
+ * Mobile-only bottom sheet (vaul Drawer) displaying session metadata:
+ * model picker, permission mode, context usage, and connection status.
+ * Desktop uses inline header controls in ChatPage instead.
+ */
 export function SessionInfoSheet({
   currentModel,
   currentMode,

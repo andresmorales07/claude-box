@@ -3,14 +3,15 @@ import { useMessagesStore } from "@/stores/messages";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 
-/** Map model ID to a short display label. Falls back to the name or raw ID. */
+/** Map a model ID to a short display label.
+ *  Priority: explicit display name > derived from ID pattern > raw ID. */
 export function modelLabel(id: string, name?: string): string {
   if (name) return name;
-  // Derive from ID: "claude-opus-4-6-20250514" → "Opus 4.6"
-  const match = id.match(/claude-(\w+)-(\d+)-(\d+)/);
+  // Derive from ID: "claude-opus-4-6-20250514" → "Opus 4.6", "claude-sonnet-4-20250514" → "Sonnet 4"
+  const match = id.match(/claude-(\w+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8,})?$/);
   if (match) {
     const family = match[1].charAt(0).toUpperCase() + match[1].slice(1);
-    return `${family} ${match[2]}.${match[3]}`;
+    return match[3] ? `${family} ${match[2]}.${match[3]}` : `${family} ${match[2]}`;
   }
   return id;
 }
