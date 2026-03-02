@@ -34,7 +34,11 @@ export function ThinkingIndicator({ thinkingText, startTime }: Props) {
     <div className="flex items-center gap-2 py-2 text-[0.8125rem] self-start">
       <span className="inline-block w-2 h-2 rounded-full shrink-0 bg-primary animate-pulse" />
       <span className="text-primary italic overflow-hidden text-ellipsis whitespace-nowrap max-w-[500px]">{snippet}</span>
-      <span className="text-muted-foreground text-xs whitespace-nowrap ml-auto">{elapsed}s</span>
+      <span className="text-muted-foreground text-xs whitespace-nowrap ml-auto">
+        {elapsed >= 60
+          ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`
+          : `${elapsed}s`}
+      </span>
     </div>
   );
 }
