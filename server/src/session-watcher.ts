@@ -142,6 +142,7 @@ export class SessionWatcher {
         }
         await this.replayFromFile(sessionId, watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot, lastModeSnapshot);
       }
+      this.evictIdleSessions({ preemptive: true });
       return;
     }
 
@@ -186,6 +187,11 @@ export class SessionWatcher {
     }
 
     await this.replayFromFile(sessionId, watched, client, messageLimit);
+    // Guard: only run eviction when the total session count exceeds the cap
+    // by a margin, avoiding premature eviction during rapid sequential subscribes.
+    if (this.sessions.size > MAX_IDLE_WATCHED + 2) {
+      this.evictIdleSessions();
+    }
   }
 
   /**
@@ -231,6 +237,52 @@ export class SessionWatcher {
   forceRemove(sessionId: string): void {
     this.broadcaster.removeSession(sessionId);
     this.sessions.delete(sessionId);
+  }
+
+  /**
+   * Evict the least recently accessed idle sessions when the count of
+   * evictable entries exceeds MAX_IDLE_WATCHED. Called after subscribe()
+   * creates or accesses an entry.
+   *
+   * Evictable = no connected WS clients AND not in push mode.
+   *
+   * Two modes control the trigger sensitivity:
+   * - **preemptive** (path 1 / re-access): fires at >= MAX_IDLE_WATCHED evictable,
+   *   targets MAX_IDLE_WATCHED - 1. Keeps one slot free for the next new entry.
+   * - **standard** (path 2 / new entry, setMode): fires at > MAX_IDLE_WATCHED
+   *   evictable, targets MAX_IDLE_WATCHED. Requires a total session count gate
+   *   (sessions.size > MAX_IDLE_WATCHED + 2) when called from new-entry subscribe
+   *   to avoid premature eviction during rapid sequential subscribes.
+   */
+  private evictIdleSessions(options?: { preemptive?: boolean }): void {
+    const evictable: Array<{ id: string; lastAccessedAt: number }> = [];
+    for (const [id, watched] of this.sessions) {
+      if (watched.mode === "push") continue;
+      if (this.broadcaster.clientCount(id) > 0) continue;
+      evictable.push({ id, lastAccessedAt: watched.lastAccessedAt });
+    }
+
+    if (options?.preemptive) {
+      // Pre-emptive: keep one slot free so the next new-entry subscribe
+      // doesn't immediately evict. Fires earlier but with a lower target.
+      if (evictable.length < MAX_IDLE_WATCHED) return;
+      evictable.sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+      const toEvict = evictable.length - (MAX_IDLE_WATCHED - 1);
+      for (let i = 0; i < toEvict; i++) {
+        const { id } = evictable[i];
+        this.broadcaster.removeSession(id);
+        this.sessions.delete(id);
+      }
+    } else {
+      if (evictable.length <= MAX_IDLE_WATCHED) return;
+      evictable.sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+      const toEvict = evictable.length - MAX_IDLE_WATCHED;
+      for (let i = 0; i < toEvict; i++) {
+        const { id } = evictable[i];
+        this.broadcaster.removeSession(id);
+        this.sessions.delete(id);
+      }
+    }
   }
 
   // ── Message production ──
@@ -373,9 +425,15 @@ export class SessionWatcher {
       };
       this.sessions.set(sessionId, watched);
     } else {
+      const wasPush = watched.mode === "push";
       watched.lastAccessedAt = Date.now();
       watched.mode = mode;
       watched.cwd = cwd ?? watched.cwd ?? null;
+      // When a session transitions out of push mode, it becomes evictable.
+      // Run standard eviction to maintain the idle cap.
+      if (wasPush && mode !== "push") {
+        this.evictIdleSessions();
+      }
     }
   }
 
