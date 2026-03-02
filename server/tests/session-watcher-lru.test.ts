@@ -94,15 +94,18 @@ describe("SessionWatcher — LRU eviction", () => {
     const adapter = createMockAdapter(fileMap);
     const { watcher } = createWatcherWithDeps(adapter);
 
-    // Subscribe + unsubscribe 12 sessions (leaves them idle with loaded messages)
+    // Subscribe + unsubscribe 12 sessions. Eviction fires during each
+    // subscribe, so by the 12th subscribe (which sees 11 idle sessions)
+    // the oldest gets evicted — leaving 11 idle after the loop.
     for (let i = 1; i <= 12; i++) {
       const { ws } = createMockWs();
       await watcher.subscribe(`sess-${i}`, ws as unknown as import("ws").WebSocket);
       watcher.unsubscribe(`sess-${i}`, ws as unknown as import("ws").WebSocket);
     }
-    expect(watcher.watchedCount).toBe(12);
+    // Eviction already fired: 12th subscribe saw 11 idle, evicted 1
+    expect(watcher.watchedCount).toBe(11);
 
-    // Subscribe to session 13 — triggers eviction
+    // Subscribe to session 13 — eviction fires again (11 idle > 10 cap)
     const { ws: ws13 } = createMockWs();
     await watcher.subscribe("sess-13", ws13 as unknown as import("ws").WebSocket);
 
