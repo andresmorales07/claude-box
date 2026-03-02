@@ -18,6 +18,9 @@ type SessionMode = "push" | "poll" | "idle";
 /** Statuses that clear transient buffers (thinking, subagents, compacting, git diff). */
 const TERMINAL_STATUSES = new Set(["completed", "error", "interrupted"]);
 
+/** Maximum number of idle WatchedSession entries to keep in memory. */
+const MAX_IDLE_WATCHED = 10;
+
 /** Buffered state for a single active subagent (keyed by toolUseId). */
 interface SubagentEntry {
   taskId: string;
@@ -71,6 +74,9 @@ interface WatchedSession {
    * even if they missed the live mode_changed event. Null until first transition.
    */
   lastMode: PermissionModeCommon | null;
+
+  /** Wall-clock ms when this session was last accessed (subscribe, message, event, setMode). */
+  lastAccessedAt: number;
 }
 
 /**
@@ -114,6 +120,7 @@ export class SessionWatcher {
     let watched = this.sessions.get(sessionId);
 
     if (watched) {
+      watched.lastAccessedAt = Date.now();
       this.broadcaster.addClient(sessionId, client);
       // Snapshot all buffers before any await — concurrent pushMessage() or
       // pushEvent() calls can mutate these during replayFromFile() suspension.
@@ -155,6 +162,7 @@ export class SessionWatcher {
       lastGitDiffStat: null,
       cwd: null,
       lastMode: null,
+      lastAccessedAt: Date.now(),
     };
     this.sessions.set(sessionId, watched);
     this.broadcaster.addClient(sessionId, client);
@@ -244,6 +252,7 @@ export class SessionWatcher {
       );
       return;
     }
+    watched.lastAccessedAt = Date.now();
     // Clear thinking buffer when the finalized assistant message arrives
     // (it contains the complete reasoning as a part, so the buffer is redundant)
     if (message.role === "assistant" && message.parts.some((p) => p.type === "reasoning")) {
@@ -278,6 +287,7 @@ export class SessionWatcher {
       }
       return;
     }
+    watched.lastAccessedAt = Date.now();
 
     // Buffer thinking text so late-connecting subscribers can catch up
     if (event.type === "thinking_delta") {
@@ -359,9 +369,11 @@ export class SessionWatcher {
         lastGitDiffStat: null,
         cwd: cwd ?? null,
         lastMode: null,
+        lastAccessedAt: Date.now(),
       };
       this.sessions.set(sessionId, watched);
     } else {
+      watched.lastAccessedAt = Date.now();
       watched.mode = mode;
       watched.cwd = cwd ?? watched.cwd ?? null;
     }
