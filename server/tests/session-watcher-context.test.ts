@@ -3,6 +3,7 @@ import type { NormalizedMessage, ProviderAdapter, PaginatedMessages } from "../s
 import { SessionWatcher } from "../src/session-watcher.js";
 import { EventBus } from "../src/event-bus.js";
 import { WsBroadcaster } from "../src/ws-broadcaster.js";
+import { createMockWs } from "./watcher-test-utils.js";
 
 // ── Helpers ──
 
@@ -30,17 +31,6 @@ function createMockAdapter(): ProviderAdapter {
       return null;
     },
   };
-}
-
-type MockWs = { readyState: number; send: (data: string) => void };
-
-function createMockWs(): { ws: MockWs; sent: string[] } {
-  const sent: string[] = [];
-  const ws = {
-    readyState: 1,
-    send(data: string) { sent.push(data); },
-  } as MockWs;
-  return { ws, sent };
 }
 
 /** Parse events of a given type from recorded sends. */

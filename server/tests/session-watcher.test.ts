@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { writeFile, mkdir, rm, appendFile, readFile } from "node:fs/promises";
+import { writeFile, mkdir, rm, appendFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { NormalizedMessage, ProviderAdapter, PaginatedMessages } from "../src/providers/types.js";
+import type { NormalizedMessage, ProviderAdapter } from "../src/providers/types.js";
 import { SessionWatcher } from "../src/session-watcher.js";
 import { EventBus } from "../src/event-bus.js";
 import { WsBroadcaster } from "../src/ws-broadcaster.js";
+import { createMockWs, createFilePathMockAdapter } from "./watcher-test-utils.js";
 
 /** Create a SessionWatcher with its required EventBus + WsBroadcaster dependencies. */
 function createWatcher(adapter: ProviderAdapter): SessionWatcher {
@@ -14,90 +15,11 @@ function createWatcher(adapter: ProviderAdapter): SessionWatcher {
   return new SessionWatcher(adapter, bus, broadcaster);
 }
 
+const createMockAdapter = createFilePathMockAdapter;
+
 // ── Helpers ──
 
 const testDir = join(tmpdir(), `hatchpod-watcher-test-${Date.now()}`);
-
-/** Minimal mock adapter that parses `{"type":"text","text":"..."}` JSONL lines. */
-function createMockAdapter(filePathMap: Map<string, string>): ProviderAdapter {
-  function normalizeLine(line: string, index: number): NormalizedMessage | null {
-    if (!line.trim()) return null;
-    let parsed: { type?: string; text?: string };
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      return null;
-    }
-    if (parsed.type !== "text" || !parsed.text) return null;
-    return {
-      role: "assistant",
-      parts: [{ type: "text", text: parsed.text }],
-      index,
-    };
-  }
-
-  return {
-    name: "MockAdapter",
-    id: "mock",
-    async *run(): AsyncGenerator<NormalizedMessage, { providerSessionId?: string; totalCostUsd: number; numTurns: number }, undefined> {
-      return { totalCostUsd: 0, numTurns: 0 };
-    },
-    async getSessionHistory(_sessionId: string): Promise<NormalizedMessage[]> {
-      return [];
-    },
-    async getMessages(sessionId: string, options?: { before?: number; limit?: number }): Promise<PaginatedMessages> {
-      const filePath = filePathMap.get(sessionId);
-      if (!filePath) {
-        const err = new Error(`Session file not found for ${sessionId}`);
-        err.name = "SessionNotFound";
-        throw err;
-      }
-      let content: string;
-      try {
-        content = await readFile(filePath, "utf-8");
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-          return { messages: [], tasks: [], totalMessages: 0, hasMore: false, oldestIndex: 0 };
-        }
-        throw err;
-      }
-      const allMessages: NormalizedMessage[] = [];
-      let idx = 0;
-      for (const line of content.split("\n")) {
-        const msg = normalizeLine(line, idx);
-        if (msg) { allMessages.push(msg); idx++; }
-      }
-      const before = options?.before ?? allMessages.length;
-      const limit = Math.min(Math.max(options?.limit ?? 30, 1), 100);
-      const eligible = allMessages.filter((m) => m.index < before);
-      const page = eligible.slice(-limit);
-      const oldestIndex = page.length > 0 ? page[0].index : 0;
-      const hasMore = eligible.length > page.length;
-      return { messages: page, tasks: [], totalMessages: allMessages.length, hasMore, oldestIndex };
-    },
-    async listSessions() {
-      return [];
-    },
-    async getSessionFilePath(sessionId: string): Promise<string | null> {
-      return filePathMap.get(sessionId) ?? null;
-    },
-    normalizeFileLine: normalizeLine,
-  };
-}
-
-/** Mock WebSocket with readyState and send() that records data. */
-function createMockWs(): { ws: MockWs; sent: string[] } {
-  const sent: string[] = [];
-  const ws = {
-    readyState: 1, // OPEN
-    send(data: string) {
-      sent.push(data);
-    },
-  } as MockWs;
-  return { ws, sent };
-}
-
-type MockWs = { readyState: number; send: (data: string) => void };
 
 function jsonlLine(text: string): string {
   return JSON.stringify({ type: "text", text }) + "\n";

@@ -18,6 +18,9 @@ type SessionMode = "push" | "poll" | "idle";
 /** Statuses that clear transient buffers (thinking, subagents, compacting, git diff). */
 const TERMINAL_STATUSES = new Set(["completed", "error", "interrupted"]);
 
+/** Maximum number of idle WatchedSession entries to keep in memory. */
+const MAX_IDLE_WATCHED = 10;
+
 /** Buffered state for a single active subagent (keyed by toolUseId). */
 interface SubagentEntry {
   taskId: string;
@@ -71,6 +74,9 @@ interface WatchedSession {
    * even if they missed the live mode_changed event. Null until first transition.
    */
   lastMode: PermissionModeCommon | null;
+
+  /** Wall-clock ms when this session was last accessed (subscribe, message, event, setMode). */
+  lastAccessedAt: number;
 }
 
 /**
@@ -114,6 +120,7 @@ export class SessionWatcher {
     let watched = this.sessions.get(sessionId);
 
     if (watched) {
+      watched.lastAccessedAt = Date.now();
       this.broadcaster.addClient(sessionId, client);
       // Snapshot all buffers before any await — concurrent pushMessage() or
       // pushEvent() calls can mutate these during replayFromFile() suspension.
@@ -135,6 +142,7 @@ export class SessionWatcher {
         }
         await this.replayFromFile(sessionId, watched, client, messageLimit, thinkingSnapshot, subagentsSnapshot, compactingSnapshot, contextUsageSnapshot, gitDiffStatSnapshot, lastModeSnapshot);
       }
+      this.evictIdleSessions();
       return;
     }
 
@@ -155,6 +163,7 @@ export class SessionWatcher {
       lastGitDiffStat: null,
       cwd: null,
       lastMode: null,
+      lastAccessedAt: Date.now(),
     };
     this.sessions.set(sessionId, watched);
     this.broadcaster.addClient(sessionId, client);
@@ -178,12 +187,14 @@ export class SessionWatcher {
     }
 
     await this.replayFromFile(sessionId, watched, client, messageLimit);
+    this.evictIdleSessions();
   }
 
   /**
    * Unsubscribe a client from a session.
    * Removes the session entry if no clients remain AND no in-memory messages
-   * exist. Sessions with messages are preserved for reconnect replay.
+   * exist. Sessions with messages are retained for immediate reconnect replay,
+   * but may be evicted later by LRU eviction (see evictIdleSessions).
    */
   unsubscribe(sessionId: string, client: WebSocket): void {
     const watched = this.sessions.get(sessionId);
@@ -225,6 +236,33 @@ export class SessionWatcher {
     this.sessions.delete(sessionId);
   }
 
+  /**
+   * Evict the least recently accessed idle sessions when the count of
+   * evictable entries exceeds MAX_IDLE_WATCHED. Called after subscribe()
+   * creates or accesses an entry, and when setMode() transitions a
+   * session out of push mode (making it evictable).
+   *
+   * Evictable = no connected WS clients AND not in push mode.
+   */
+  private evictIdleSessions(): void {
+    const evictable: Array<{ id: string; lastAccessedAt: number }> = [];
+    for (const [id, watched] of this.sessions) {
+      if (watched.mode === "push") continue;
+      if (this.broadcaster.clientCount(id) > 0) continue;
+      evictable.push({ id, lastAccessedAt: watched.lastAccessedAt });
+    }
+
+    if (evictable.length <= MAX_IDLE_WATCHED) return;
+
+    // Sort oldest first
+    evictable.sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+
+    const toEvict = evictable.length - MAX_IDLE_WATCHED;
+    for (let i = 0; i < toEvict; i++) {
+      this.forceRemove(evictable[i].id);
+    }
+  }
+
   // ── Message production ──
 
   /**
@@ -244,6 +282,7 @@ export class SessionWatcher {
       );
       return;
     }
+    watched.lastAccessedAt = Date.now();
     // Clear thinking buffer when the finalized assistant message arrives
     // (it contains the complete reasoning as a part, so the buffer is redundant)
     if (message.role === "assistant" && message.parts.some((p) => p.type === "reasoning")) {
@@ -278,6 +317,7 @@ export class SessionWatcher {
       }
       return;
     }
+    watched.lastAccessedAt = Date.now();
 
     // Buffer thinking text so late-connecting subscribers can catch up
     if (event.type === "thinking_delta") {
@@ -359,11 +399,19 @@ export class SessionWatcher {
         lastGitDiffStat: null,
         cwd: cwd ?? null,
         lastMode: null,
+        lastAccessedAt: Date.now(),
       };
       this.sessions.set(sessionId, watched);
     } else {
+      const wasPush = watched.mode === "push";
+      watched.lastAccessedAt = Date.now();
       watched.mode = mode;
       watched.cwd = cwd ?? watched.cwd ?? null;
+      // When a session transitions out of push mode, it becomes evictable.
+      // Run standard eviction to maintain the idle cap.
+      if (wasPush && mode !== "push") {
+        this.evictIdleSessions();
+      }
     }
   }
 
@@ -399,6 +447,7 @@ export class SessionWatcher {
     }
     watched.lineBuffer = "";
     watched.mode = "poll";
+    this.evictIdleSessions();
   }
 
   // ── Lifecycle ──
