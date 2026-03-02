@@ -34,11 +34,18 @@ function eventType(event: SessionEvent): string {
   return event.type === "message" ? "message" : event.type;
 }
 
-/** Interpolate {{variable}} placeholders in a template string. Values are JSON-escaped to prevent injection. */
-function interpolate(template: string, vars: Record<string, string>): string {
+/**
+ * Interpolate {{variable}} placeholders in a template string.
+ * - String values are JSON-escaped (safe for embedding inside quoted JSON strings: "{{var}}")
+ * - Non-string values (objects, arrays) are serialized as raw JSON (safe for embedding unquoted: {{var}})
+ */
+function interpolate(template: string, vars: Record<string, unknown>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
     const value = vars[key] ?? "";
-    return JSON.stringify(value).slice(1, -1);
+    if (typeof value === "string") {
+      return JSON.stringify(value).slice(1, -1);
+    }
+    return JSON.stringify(value);
   });
 }
 
@@ -86,14 +93,20 @@ export class WebhookDispatcher {
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const deliveryId = randomUUID();
 
-    const vars: Record<string, string> = {
+    // For ephemeral events, status/error live on the inner event, not the outer bus envelope.
+    const inner = event.type === "ephemeral" ? event.event : null;
+    const innerStatus = inner && "status" in inner ? String((inner as { status: string }).status) : "";
+    const innerError = inner && "error" in inner && (inner as { error?: string }).error
+      ? String((inner as { error: string }).error) : "";
+
+    const vars: Record<string, unknown> = {
       event: type,
       timestamp: new Date().toISOString(),
       sessionId: "sessionId" in event ? event.sessionId : "",
-      status: "status" in event ? String(event.status) : "",
+      status: event.type === "session.status" ? event.status : innerStatus,
       message: buildMessage(event),
-      data: JSON.stringify(event),
-      error: "error" in event && event.error ? String(event.error) : "",
+      data: event,
+      error: event.type === "session.status" ? (event.error ?? "") : innerError,
     };
 
     let body: string;
@@ -101,7 +114,10 @@ export class WebhookDispatcher {
 
     if (webhook.template) {
       body = interpolate(webhook.template.body, vars);
-      headers = {};
+      headers = {
+        "X-Hatchpod-Event": type,
+        "X-Hatchpod-Delivery": deliveryId,
+      };
       if (webhook.template.headers) {
         for (const [key, value] of Object.entries(webhook.template.headers)) {
           headers[key] = interpolate(value, vars);

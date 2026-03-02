@@ -42,6 +42,7 @@ setInterval(() => {
 // ── SessionWatcher singleton ──
 
 let watcher: SessionWatcher | null = null;
+let eventBus: EventBus | null = null;
 
 /**
  * Initialize the SessionWatcher singleton. Call once at server startup.
@@ -49,6 +50,7 @@ let watcher: SessionWatcher | null = null;
  */
 export function initWatcher(adapter: ProviderAdapter, bus: EventBus, broadcaster: WsBroadcaster): SessionWatcher {
   if (watcher) return watcher;
+  eventBus = bus;
   watcher = new SessionWatcher(adapter, bus, broadcaster);
   watcher.start();
   return watcher;
@@ -192,6 +194,8 @@ export async function createSession(
   };
 
   sessions.set(id, session);
+
+  eventBus?.emit({ type: "session.created", sessionId: id, cwd: session.cwd, model: session.model });
 
   if (hasPrompt) {
     runSession(session, req.prompt!, req.permissionMode ?? "default", req.model, req.allowedTools, req.resumeSessionId);

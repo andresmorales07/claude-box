@@ -8,16 +8,20 @@ import { z } from "zod";
 const DEFAULT_PATH = join(homedir(), ".config", "hatchpod", "webhooks.json");
 
 export class WebhookRegistry {
+  private cache: Webhook[] | null = null;
+
   constructor(private readonly path: string = DEFAULT_PATH) {}
 
   async list(): Promise<Webhook[]> {
+    if (this.cache) return this.cache;
     try {
       const raw = await readFile(this.path, "utf-8");
       const parsed = z.array(WebhookSchema).safeParse(JSON.parse(raw));
-      return parsed.success ? parsed.data : [];
+      this.cache = parsed.success ? parsed.data : [];
     } catch {
-      return [];
+      this.cache = [];
     }
+    return this.cache;
   }
 
   async getById(id: string): Promise<Webhook | undefined> {
@@ -58,10 +62,12 @@ export class WebhookRegistry {
   }
 
   private async save(webhooks: Webhook[]): Promise<void> {
+    this.cache = null;
     const dir = dirname(this.path);
     await mkdir(dir, { recursive: true });
     const tmp = `${this.path}.${randomUUID()}.tmp`;
     await writeFile(tmp, JSON.stringify(webhooks, null, 2));
     await rename(tmp, this.path);
+    this.cache = webhooks;
   }
 }

@@ -221,6 +221,7 @@ export class SessionWatcher {
    * Called during TTL eviction to prevent unbounded memory growth.
    */
   forceRemove(sessionId: string): void {
+    this.broadcaster.removeSession(sessionId);
     this.sessions.delete(sessionId);
   }
 

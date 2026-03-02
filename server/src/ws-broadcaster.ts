@@ -80,6 +80,20 @@ export class WsBroadcaster {
     }
   }
 
+  /**
+   * Remove all client references for a session (called during TTL eviction).
+   * Does not close the WebSocket connections — clients remain connected but
+   * will no longer receive events for this session.
+   */
+  removeSession(sessionId: string): void {
+    const set = this.clients.get(sessionId);
+    if (!set) return;
+    for (const ws of set) {
+      this.clientToSession.delete(ws);
+    }
+    this.clients.delete(sessionId);
+  }
+
   /** Move all clients from oldId to newId (session remap). */
   remapSession(oldId: string, newId: string): void {
     const set = this.clients.get(oldId);

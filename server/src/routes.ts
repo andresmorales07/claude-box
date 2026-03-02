@@ -531,9 +531,14 @@ export async function handleRequest(
   // POST /api/webhooks/:id/test
   const webhookTestMatch = pathname.match(WEBHOOK_TEST_RE);
   if (webhookTestMatch && method === "POST") {
-    const dispatcher = getWebhookDispatcher();
+    const webhookId = webhookTestMatch[1];
+    const exists = await getWebhookRegistry().getById(webhookId);
+    if (!exists) {
+      json(res, 404, { error: "webhook not found" });
+      return;
+    }
     try {
-      await dispatcher.sendTest(webhookTestMatch[1]);
+      await getWebhookDispatcher().sendTest(webhookId);
       json(res, 200, { ok: true });
     } catch (err) {
       json(res, 502, { error: (err as Error).message });
