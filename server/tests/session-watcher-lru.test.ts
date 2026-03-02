@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { writeFile, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { NormalizedMessage, ProviderAdapter, PaginatedMessages } from "../src/providers/types.js";
+import type { ProviderAdapter } from "../src/providers/types.js";
 import { SessionWatcher } from "../src/session-watcher.js";
 import { EventBus } from "../src/event-bus.js";
 import { WsBroadcaster } from "../src/ws-broadcaster.js";
+import { createMockWs, createFilePathMockAdapter, type MockWs } from "./watcher-test-utils.js";
 
 // ── Helpers ──
 
@@ -20,47 +21,7 @@ function createWatcherWithDeps(adapter: ProviderAdapter) {
   return { watcher, bus, broadcaster };
 }
 
-function createMockAdapter(filePathMap: Map<string, string>): ProviderAdapter {
-  function normalizeLine(line: string, index: number): NormalizedMessage | null {
-    if (!line.trim()) return null;
-    let parsed: { type?: string; text?: string };
-    try { parsed = JSON.parse(line); } catch { return null; }
-    if (parsed.type !== "text" || !parsed.text) return null;
-    return { role: "assistant", parts: [{ type: "text", text: parsed.text }], index };
-  }
-
-  return {
-    name: "MockAdapter",
-    id: "mock",
-    async *run() { return { totalCostUsd: 0, numTurns: 0 }; },
-    async getSessionHistory() { return []; },
-    async getMessages(sessionId: string, options?: { before?: number; limit?: number }): Promise<PaginatedMessages> {
-      const filePath = filePathMap.get(sessionId);
-      if (!filePath) { const err = new Error("not found"); err.name = "SessionNotFound"; throw err; }
-      const { readFile } = await import("node:fs/promises");
-      const content = await readFile(filePath, "utf-8");
-      const allMessages: NormalizedMessage[] = [];
-      let idx = 0;
-      for (const line of content.split("\n")) {
-        const msg = normalizeLine(line, idx);
-        if (msg) { allMessages.push(msg); idx++; }
-      }
-      const limit = Math.min(options?.limit ?? 100, 100);
-      const page = allMessages.slice(-limit);
-      return { messages: page, tasks: [], totalMessages: allMessages.length, hasMore: false, oldestIndex: page[0]?.index ?? 0 };
-    },
-    async listSessions() { return []; },
-    async getSessionFilePath(sessionId: string) { return filePathMap.get(sessionId) ?? null; },
-    normalizeFileLine: normalizeLine,
-  };
-}
-
-type MockWs = { readyState: number; send: (data: string) => void };
-
-function createMockWs(): { ws: MockWs; sent: string[] } {
-  const sent: string[] = [];
-  return { ws: { readyState: 1, send(data: string) { sent.push(data); } } as MockWs, sent };
-}
+const createMockAdapter = createFilePathMockAdapter;
 
 /** Create a JSONL file with one line for a session. */
 async function createSessionFile(sessionId: string): Promise<string> {
@@ -247,6 +208,27 @@ describe("SessionWatcher — LRU eviction", () => {
 
     // sess-2 should be evicted (oldest), not sess-1
     expect(watcher.watchedCount).toBe(11);
+
+    watcher.stop();
+  });
+
+  it("transitionToPoll triggers eviction when idle cap is exceeded", async () => {
+    const adapter = createMockAdapter(new Map());
+    const { watcher } = createWatcherWithDeps(adapter);
+
+    // Create 11 sessions in push mode (simulates 11 concurrent API sessions)
+    for (let i = 1; i <= 11; i++) {
+      watcher.setMode(`sess-${i}`, "push");
+    }
+    expect(watcher.watchedCount).toBe(11);
+
+    // Complete each session via transitionToPoll — should trigger eviction
+    for (let i = 1; i <= 11; i++) {
+      await watcher.transitionToPoll(`sess-${i}`);
+    }
+
+    // LRU cap is 10 — one session should have been evicted
+    expect(watcher.watchedCount).toBeLessThanOrEqual(10);
 
     watcher.stop();
   });

@@ -193,7 +193,8 @@ export class SessionWatcher {
   /**
    * Unsubscribe a client from a session.
    * Removes the session entry if no clients remain AND no in-memory messages
-   * exist. Sessions with messages are preserved for reconnect replay.
+   * exist. Sessions with messages are retained for immediate reconnect replay,
+   * but may be evicted later by LRU eviction (see evictIdleSessions).
    */
   unsubscribe(sessionId: string, client: WebSocket): void {
     const watched = this.sessions.get(sessionId);
@@ -258,9 +259,7 @@ export class SessionWatcher {
 
     const toEvict = evictable.length - MAX_IDLE_WATCHED;
     for (let i = 0; i < toEvict; i++) {
-      const { id } = evictable[i];
-      this.broadcaster.removeSession(id);
-      this.sessions.delete(id);
+      this.forceRemove(evictable[i].id);
     }
   }
 
@@ -448,6 +447,7 @@ export class SessionWatcher {
     }
     watched.lineBuffer = "";
     watched.mode = "poll";
+    this.evictIdleSessions();
   }
 
   // ── Lifecycle ──
