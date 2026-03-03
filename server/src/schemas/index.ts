@@ -90,4 +90,25 @@ export type {
   Webhook, CreateWebhook, PatchWebhook, WebhookEventType,
 } from "./webhooks.js";
 
+// Claude Code hooks
+export {
+  CommandHookSchema,
+  HttpHookSchema,
+  HookHandlerSchema,
+  MatcherGroupSchema,
+  HookEventNameSchema,
+  HookConfigSchema,
+  WorkspaceInfoSchema,
+  HOOK_EVENT_NAMES,
+} from "./claude-hooks.js";
+export type {
+  CommandHook,
+  HttpHook,
+  HookHandler,
+  MatcherGroup,
+  HookEventName,
+  HookConfig,
+  WorkspaceInfo,
+} from "./claude-hooks.js";
+
 export { openApiDocument } from "./registry.js";
