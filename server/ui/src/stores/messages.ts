@@ -25,6 +25,7 @@ type ServerMessage =
   | { type: "git_diff_stat"; files: GitFileStat[]; totalInsertions: number; totalDeletions: number; branch?: string }
   | { type: "rate_limit"; status: string; rateLimitType?: string; utilization?: number; resetsAt?: number; overageStatus?: string; overageResetsAt?: number; overageDisabledReason?: string; isUsingOverage?: boolean; surpassedThreshold?: number }
   | { type: "ping" }
+  | { type: "claude_hooks_changed"; scope: "user" | "workspace"; path?: string }
   | { type: "error"; message: string; error?: string };
 
 type ContextUsage = { inputTokens: number; contextWindow: number; percentUsed: number };
@@ -534,6 +535,11 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
           case "error":
             console.error("Server error:", msg.message);
             set({ lastError: msg.message });
+            break;
+          case "claude_hooks_changed":
+            import("./claude-hooks.js").then(({ useClaudeHooksStore }) => {
+              useClaudeHooksStore.getState().fetchHooks();
+            });
             break;
         }
       };
