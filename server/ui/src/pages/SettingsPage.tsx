@@ -10,6 +10,9 @@ import type { RateLimitInfo } from "@/stores/messages";
 import { WebhookList } from "@/components/WebhookList";
 import { WebhookForm } from "@/components/WebhookForm";
 import type { Webhook } from "@/stores/webhooks";
+import { ClaudeHooksList } from "@/components/ClaudeHooksList";
+import { ClaudeHookForm, type EditingHook } from "@/components/ClaudeHookForm";
+import { useClaudeHooksStore, type HookEventName } from "@/stores/claude-hooks";
 import { Moon, Sun, Terminal, Info, Bot, Gauge } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +67,8 @@ export function SettingsPage() {
   const [rateLimitsLoading, setRateLimitsLoading] = useState(true);
   const [webhookFormOpen, setWebhookFormOpen] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<Webhook | null>(null);
+  const [hookFormOpen, setHookFormOpen] = useState(false);
+  const [editingHook, setEditingHook] = useState<EditingHook | null>(null);
 
   const fetchRateLimits = useCallback(async () => {
     try {
@@ -354,6 +359,29 @@ export function SettingsPage() {
           open={webhookFormOpen}
           onClose={() => { setWebhookFormOpen(false); setEditingWebhook(null); }}
           editing={editingWebhook}
+        />
+
+        {/* Claude Code Hooks */}
+        <ClaudeHooksList
+          onEdit={(event: HookEventName, groupIdx: number, handlerIdx: number) => {
+            const hooks = useClaudeHooksStore.getState().hooks;
+            const groups = hooks[event];
+            const group = groups?.[groupIdx];
+            const handler = group?.hooks[handlerIdx];
+            if (handler) {
+              setEditingHook({ event, groupIdx, handlerIdx, matcher: group.matcher, handler });
+              setHookFormOpen(true);
+            }
+          }}
+          onAdd={() => {
+            setEditingHook(null);
+            setHookFormOpen(true);
+          }}
+        />
+        <ClaudeHookForm
+          open={hookFormOpen}
+          onClose={() => { setHookFormOpen(false); setEditingHook(null); }}
+          editing={editingHook}
         />
 
         {/* About */}
