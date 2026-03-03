@@ -2,6 +2,7 @@ import { createServer as createHttpServer } from "node:http";
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { requirePassword, getRequestIp } from "./auth.js";
@@ -130,6 +131,15 @@ export function createApp() {
 
   // Initialize Claude hooks service
   claudeHooksService = new ClaudeHooksService();
+
+  // Watch user-level settings file for hook changes — broadcast to all WS clients
+  const userSettingsPath = join(homedir(), ".claude", "settings.json");
+  claudeHooksService.watchFile(userSettingsPath, () => {
+    broadcaster.broadcastGlobal({
+      type: "claude_hooks_changed",
+      scope: "user",
+    });
+  });
 
   // Probe the SDK for available models (fire-and-forget — cached in claude-adapter.ts).
   void preloadSupportedModels();
