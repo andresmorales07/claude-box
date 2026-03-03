@@ -129,6 +129,31 @@ export class WsBroadcaster {
     }
   }
 
+  /**
+   * Broadcast a message to ALL connected WebSocket clients, regardless of session.
+   * Used for global events like settings file changes that affect every client.
+   */
+  broadcastGlobal(msg: ServerMessage): void {
+    const payload = JSON.stringify(msg);
+    for (const [sessionId, set] of this.clients) {
+      for (const client of set) {
+        if (client.readyState === 1) {
+          try {
+            client.send(payload);
+          } catch (err) {
+            console.warn("WsBroadcaster: broadcastGlobal send failed, removing client:", (err as Error).message);
+            set.delete(client);
+            this.clientToSession.delete(client);
+          }
+        } else {
+          set.delete(client);
+          this.clientToSession.delete(client);
+        }
+      }
+      if (set.size === 0) this.clients.delete(sessionId);
+    }
+  }
+
   /** Stop listening to the EventBus and release all client references. */
   stop(): void {
     if (this.unsub) {

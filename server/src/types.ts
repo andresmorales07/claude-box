@@ -67,6 +67,7 @@ export type ServerMessage =
   | { type: "git_diff_stat"; files: Array<{ path: string; insertions: number; deletions: number; binary: boolean; untracked: boolean; staged: boolean }>; totalInsertions: number; totalDeletions: number; branch?: string }
   | { type: "rate_limit"; status: string; rateLimitType?: string; utilization?: number; resetsAt?: number; overageStatus?: string; overageResetsAt?: number; overageDisabledReason?: string; isUsingOverage?: boolean; surpassedThreshold?: number }
   | { type: "ping" }
+  | { type: "claude_hooks_changed"; scope: "user" | "workspace"; path?: string }
   | { type: "error"; message: string };
 
 /** Shared type for context window usage data, used in both server-side watcher state and WS events. */

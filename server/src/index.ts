@@ -2,6 +2,7 @@ import { createServer as createHttpServer } from "node:http";
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { requirePassword, getRequestIp } from "./auth.js";
@@ -23,6 +24,7 @@ import { eventBus } from "./event-bus.js";
 import { WsBroadcaster } from "./ws-broadcaster.js";
 import { WebhookRegistry } from "./webhooks.js";
 import { WebhookDispatcher } from "./webhook-dispatcher.js";
+import { ClaudeHooksService } from "./claude-hooks.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -100,6 +102,7 @@ function serveIndex(
 
 let webhookRegistry: WebhookRegistry | null = null;
 let webhookDispatcher: WebhookDispatcher | null = null;
+let claudeHooksService: ClaudeHooksService | null = null;
 
 export function getWebhookRegistry(): WebhookRegistry {
   if (!webhookRegistry) throw new Error("WebhookRegistry not initialized");
@@ -111,6 +114,11 @@ export function getWebhookDispatcher(): WebhookDispatcher {
   return webhookDispatcher;
 }
 
+export function getClaudeHooksService(): ClaudeHooksService {
+  if (!claudeHooksService) throw new Error("ClaudeHooksService not initialized");
+  return claudeHooksService;
+}
+
 export function createApp() {
   // Initialize the SessionWatcher with the default provider adapter.
   // This starts polling JSONL session files for new messages.
@@ -120,6 +128,18 @@ export function createApp() {
   // Initialize webhook subsystem
   webhookRegistry = new WebhookRegistry();
   webhookDispatcher = new WebhookDispatcher(eventBus, webhookRegistry);
+
+  // Initialize Claude hooks service
+  claudeHooksService = new ClaudeHooksService();
+
+  // Watch user-level settings file for hook changes — broadcast to all WS clients
+  const userSettingsPath = join(homedir(), ".claude", "settings.json");
+  claudeHooksService.watchFile(userSettingsPath, () => {
+    broadcaster.broadcastGlobal({
+      type: "claude_hooks_changed",
+      scope: "user",
+    });
+  });
 
   // Probe the SDK for available models (fire-and-forget — cached in claude-adapter.ts).
   void preloadSupportedModels();
@@ -244,5 +264,12 @@ if (isDirectRun || process.env.HATCHPOD_AUTO_LISTEN === "1") {
   const { server } = createApp();
   server.listen(PORT, HOST, () => {
     console.log(`hatchpod API server listening on ${HOST}:${PORT}`);
+  });
+
+  // Graceful shutdown: release file watchers and debounce timers so Node can exit cleanly.
+  process.once("SIGTERM", () => {
+    claudeHooksService?.unwatchAll();
+    webhookDispatcher?.stop();
+    server.close(() => process.exit(0));
   });
 }
